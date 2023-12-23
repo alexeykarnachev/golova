@@ -10,14 +10,20 @@ BUILD_PATH=$(CURR_DIR)/build
 # ------------------------------------------------------------------------
 # Raylib
 RAYLIB_VERSION=5.0
+RAYGUI_VERSION=4.0
 RAYLIB_URL=https://github.com/raysan5/raylib/archive/refs/tags/$(RAYLIB_VERSION).tar.gz
+RAYGUI_URL=https://github.com/raysan5/raygui/archive/refs/tags/$(RAYGUI_VERSION).tar.gz
 
 RAYLIB_NAME=raylib-$(RAYLIB_VERSION)
+RAYGUI_NAME=raygui-$(RAYGUI_VERSION)
 
 RAYLIB_PATH=$(DEPS_PATH)/$(RAYLIB_NAME)
+RAYGUI_PATH=$(DEPS_PATH)/$(RAYGUI_NAME)
 RAYLIB_ARCHIVE_PATH=$(DEPS_PATH)/$(RAYLIB_NAME).tar.gz
+RAYGUI_ARCHIVE_PATH=$(DEPS_PATH)/$(RAYGUI_NAME).tar.gz
 
 RAYLIB_SRC_PATH=$(RAYLIB_PATH)/src
+RAYGUI_SRC_PATH=$(RAYGUI_PATH)/src
 RAYLIB_BUILD_PATH=$(RAYLIB_PATH)/build
 
 RAYLIB_PLATFORM=PLATFORM_DESKTOP
@@ -43,13 +49,17 @@ raylib:
 		mkdir -p $(DEPS_PATH); \
 		wget $(RAYLIB_URL) -O $(RAYLIB_ARCHIVE_PATH); \
 		tar zxvf $(RAYLIB_ARCHIVE_PATH) -C $(DEPS_PATH); \
+		wget $(RAYGUI_URL) -O $(RAYGUI_ARCHIVE_PATH); \
+		tar zxvf $(RAYGUI_ARCHIVE_PATH) -C $(DEPS_PATH); \
 	fi
 	if [ ! -d $(RAYLIB_BUILD_PATH) ]; then \
 		cd $(RAYLIB_SRC_PATH) \
 		&& make PLATFORM=$(RAYLIB_PLATFORM) \
 		&& sudo make install \
 			RAYLIB_INSTALL_PATH=$(RAYLIB_BUILD_PATH) \
-			RAYLIB_H_INSTALL_PATH=$(RAYLIB_BUILD_PATH); \
+			RAYLIB_H_INSTALL_PATH=$(RAYLIB_BUILD_PATH) \
+		&& sudo cp $(RAYLIB_SRC_PATH)/rcamera.h $(RAYLIB_BUILD_PATH) \
+		&& sudo cp $(RAYGUI_SRC_PATH)/raygui.h $(RAYLIB_BUILD_PATH); \
 	fi
 
 $(PROJECT_NAME): $(OBJS); \

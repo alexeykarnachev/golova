@@ -1,6 +1,7 @@
 #include "raylib.h"
 #include "raymath.h"
-#include "../deps/raylib-5.0/src/rcamera.h"
+#include "raygui.h"
+#include "rcamera.h"
 #include <math.h>
 #include <rlgl.h>
 #include <stddef.h>
