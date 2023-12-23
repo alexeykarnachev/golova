@@ -1,11 +1,14 @@
 #include "raylib.h"
 #include "raymath.h"
-#include "raygui.h"
 #include "rcamera.h"
 #include <math.h>
 #include <rlgl.h>
 #include <stddef.h>
 #include <stdio.h>
+
+#define RAYGUI_IMPLEMENTATION
+#include "raygui.h"
+#undef RAYGUI_IMPLEMENTATION
 
 void camera_update(Camera3D *camera) {
     float rot_speed = 0.15f;
@@ -57,24 +60,19 @@ int main(void) {
     const int screen_height = 768;
     InitWindow(screen_width, screen_height, "Golova");
     rlEnableDepthTest();
-    SetTargetFPS(60);
+    SetTargetFPS(10);
 
-    // setup initial camera data
+    GuiLoadStyleDefault();
+
     Camera3D camera;
-
     camera.fovy = 45.0f;
     camera.target = (Vector3){0.0f, 0.0f, 0.0f};
     camera.position = (Vector3){5.0f, 5.0f, 5.0f};
     camera.up = (Vector3){0.0f, 1.0f, 0.0f};
     camera.projection = CAMERA_PERSPECTIVE;
 
-    Vector2 cursorPos = GetMousePosition(); // save off current position so we have a start point
-
-
     Shader ground_shader = LoadShader(0, "resources/shaders/ground.frag");
-
     Model golova = golova_create();
-
 
     while (!WindowShouldClose()) {
         camera_update(&camera);
