@@ -10,6 +10,7 @@
 #include "raygui.h"
 #undef RAYGUI_IMPLEMENTATION
 
+
 void camera_update(Camera3D *camera) {
     float rot_speed = 0.15f;
     float move_speed = 0.5f;
@@ -60,7 +61,7 @@ int main(void) {
     const int screen_height = 768;
     InitWindow(screen_width, screen_height, "Golova");
     rlEnableDepthTest();
-    SetTargetFPS(10);
+    SetTargetFPS(60);
 
     GuiLoadStyleDefault();
 
@@ -71,8 +72,17 @@ int main(void) {
     camera.up = (Vector3){0.0f, 1.0f, 0.0f};
     camera.projection = CAMERA_PERSPECTIVE;
 
+
     Shader ground_shader = LoadShader(0, "resources/shaders/ground.frag");
     Model golova = golova_create();
+
+    float xr = 0.0;
+    float yr = 0.0;
+    float zr = 0.0;
+
+    float xt = 0.0;
+    float yt = 0.0;
+    float zt = 0.0;
 
     while (!WindowShouldClose()) {
         camera_update(&camera);
@@ -105,7 +115,18 @@ int main(void) {
         
         EndMode3D();
 
-        // DrawText("TEST", 640, 10, 20, RED);
+        GuiDrawRectangle((Rectangle){20, 20, 340, 500}, 2, BLANK, RAYWHITE);
+        GuiSlider((Rectangle){ 30, 30, 300, 15 }, NULL, TextFormat("%0.2f", xt), &xt, -1.0f, 1.0f);
+        GuiSlider((Rectangle){ 30, 50, 300, 15 }, NULL, TextFormat("%0.2f", yt), &yt, -1.0f, 1.0f);
+        GuiSlider((Rectangle){ 30, 70, 300, 15 }, NULL, TextFormat("%0.2f", zt), &zt, -1.0f, 1.0f);
+
+        GuiSlider((Rectangle){ 30, 100, 300, 15 }, NULL, TextFormat("%0.2f", xr), &xr, -90.0f, 90.0f);
+        GuiSlider((Rectangle){ 30, 120, 300, 15 }, NULL, TextFormat("%0.2f", yr), &yr, -90.0f, 90.0f);
+        GuiSlider((Rectangle){ 30, 140, 300, 15 }, NULL, TextFormat("%0.2f", zr), &zr, -90.0f, 90.0f);
+
+        Matrix t = MatrixTranslate(xt, yt, zt);
+        Matrix r = MatrixRotateXYZ((Vector3){ DEG2RAD*xr, DEG2RAD*yr, DEG2RAD*zr });
+        golova.transform = MatrixMultiply(r, t);
 
         EndDrawing();
     }
