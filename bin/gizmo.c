@@ -1,6 +1,8 @@
 #include "raylib.h"
 #include "raymath.h"
 #include "rcamera.h"
+#include "../src/editor/gizmo.h"
+#include <math.h>
 #include <rlgl.h>
 #include <stdio.h>
 
@@ -31,7 +33,6 @@ void camera_update(Camera3D *camera) {
 }
 
 int main(void) {
-
     const int screen_width = 1024;
     const int screen_height = 768;
     InitWindow(screen_width, screen_height, "Gizmo");
@@ -44,19 +45,26 @@ int main(void) {
     camera.up = (Vector3){0.0f, 1.0f, 0.0f};
     camera.projection = CAMERA_PERSPECTIVE;
 
-    Shader shader = LoadShader("resources/shaders/gizmo.vert", "resources/shaders/gizmo.frag");
-    int camera_pos_loc = GetShaderLocation(shader, "cameraPosition");
-    int gizmo_pos_loc = GetShaderLocation(shader, "gizmoPosition");
- 
-    Vector3 center = {0};
-    float size = 10.0;
+    Gizmo gizmo = {0};
 
+    Vector3 position = {0};
+    Vector3 rotation = {0};
+    Model cube = LoadModelFromMesh(GenMeshCube(1.0, 1.0, 1.0));
+ 
     while (!WindowShouldClose()) {
-        float radius = Vector3Distance(camera.position, center) / size;
+        BoundingBox bbox = GetMeshBoundingBox(cube.meshes[0]);
+        Vector3 center = Vector3Scale(Vector3Add(bbox.min, bbox.max), 0.5);
+
         camera_update(&camera);
+        gizmo_update(&gizmo, camera, &position, &rotation);
 
         BeginDrawing();
             ClearBackground(DARKGRAY);
+            rlEnableDepthTest();
+
+            BeginMode3D(camera);
+                DrawModel(cube, (Vector3){0.0, 0.0, 0.0}, 1.0, ORANGE);
+            EndMode3D();
 
             BeginMode3D(camera);
                 rlSetLineWidth(1.0);
@@ -70,16 +78,8 @@ int main(void) {
                 DrawLine3D((Vector3){0.0f, 0.0f, -50.0f}, (Vector3){0.0f, 0.0f, 50.0f}, DARKBLUE);
             EndMode3D();
 
-            BeginMode3D(camera);
-                rlSetLineWidth(4.0);
-                BeginShaderMode(shader);
-                    SetShaderValue(shader, camera_pos_loc, &camera.position, SHADER_UNIFORM_VEC3);
-                    SetShaderValue(shader, gizmo_pos_loc, &center, SHADER_UNIFORM_VEC3);
-                    DrawCircle3D(center, radius, (Vector3){0.0, 1.0, 0.0}, 90.0, RED);
-                    DrawCircle3D(center, radius, (Vector3){1.0, 0.0, 0.0}, 90.0, GREEN);
-                    DrawCircle3D(center, radius, (Vector3){1.0, 0.0, 0.0}, 0.0, BLUE);
-                EndShaderMode();
-            EndMode3D();
+            gizmo_draw(&gizmo, camera, position);
+
         EndDrawing();
     }
 
