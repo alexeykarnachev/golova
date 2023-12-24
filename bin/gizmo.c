@@ -1,17 +1,8 @@
 #include "raylib.h"
 #include "raymath.h"
 #include "rcamera.h"
-#include <math.h>
 #include <rlgl.h>
-#include <stddef.h>
 #include <stdio.h>
-
-#include "../src/editor/gizmo.h"
-
-#define RAYGUI_IMPLEMENTATION
-#include "raygui.h"
-#undef RAYGUI_IMPLEMENTATION
-
 
 void camera_update(Camera3D *camera) {
     float rot_speed = 0.15f;
@@ -39,33 +30,12 @@ void camera_update(Camera3D *camera) {
     CameraMoveToTarget(camera, -GetMouseWheelMove() * dt * zoom_speed);
 }
 
-Model golova_create() {
-    Texture texture = LoadTexture("resources/golova.png");
-    float texture_aspect = (float)texture.width / texture.height;
-
-    Model model = LoadModelFromMesh(GenMeshPlane(texture_aspect, 1.0, 2, 2));
-    model.materials[0].maps[0].texture = texture;
-    model.materials[0].shader = LoadShader(0, "resources/shaders/sprite.frag");
-
-    return model;
-}
-
-void editor_draw_grid() {
-    DrawGrid(100.0, 1.0);
-    DrawLine3D((Vector3){-50.0f, 0.0f, 0.0f}, (Vector3){50.0f, 0.0f, 0.0f}, RED);
-    DrawLine3D((Vector3){0.0f, -50.0f, 0.0f}, (Vector3){0.0f, 50.0f, 0.0f}, GREEN);
-    DrawLine3D((Vector3){0.0f, 0.0f, -50.0f}, (Vector3){0.0f, 0.0f, 50.0f}, DARKBLUE);
-}
-
 int main(void) {
 
     const int screen_width = 1024;
     const int screen_height = 768;
-    InitWindow(screen_width, screen_height, "Golova");
-    rlEnableDepthTest();
+    InitWindow(screen_width, screen_height, "Gizmo");
     SetTargetFPS(60);
-
-    GuiLoadStyleDefault();
 
     Camera3D camera;
     camera.fovy = 45.0f;
@@ -74,51 +44,45 @@ int main(void) {
     camera.up = (Vector3){0.0f, 1.0f, 0.0f};
     camera.projection = CAMERA_PERSPECTIVE;
 
-    Shader ground_shader = LoadShader(0, "resources/shaders/ground.frag");
-    Model golova = golova_create();
-
-    float xr = 0.0;
-    float yr = 0.0;
-    float zr = 0.0;
-
-    float xt = 0.0;
-    float yt = 0.0;
-    float zt = 0.0;
+    Shader shader = LoadShader("resources/shaders/gizmo.vert", "resources/shaders/gizmo.frag");
+    int camera_pos_loc = GetShaderLocation(shader, "cameraPosition");
+    int gizmo_pos_loc = GetShaderLocation(shader, "gizmoPosition");
+ 
+    Vector3 center = {0};
+    float size = 10.0;
 
     while (!WindowShouldClose()) {
+        float radius = Vector3Distance(camera.position, center) / size;
         camera_update(&camera);
 
-        // ---------------------------------------------------------------
-        // Draw scene
         BeginDrawing();
-        ClearBackground(DARKGRAY);
+            ClearBackground(DARKGRAY);
 
-        BeginMode3D(camera);
-            editor_draw_grid();
-            DrawModel(golova, (Vector3){0.0, 0.0, 0.0}, 1.0, WHITE);
-        EndMode3D();
+            BeginMode3D(camera);
+                rlSetLineWidth(1.0);
+                DrawGrid(100.0, 1.0);
+            EndMode3D();
 
+            BeginMode3D(camera);
+                rlSetLineWidth(2.0);
+                DrawLine3D((Vector3){-50.0f, 0.0f, 0.0f}, (Vector3){50.0f, 0.0f, 0.0f}, RED);
+                DrawLine3D((Vector3){0.0f, -50.0f, 0.0f}, (Vector3){0.0f, 50.0f, 0.0f}, GREEN);
+                DrawLine3D((Vector3){0.0f, 0.0f, -50.0f}, (Vector3){0.0f, 0.0f, 50.0f}, DARKBLUE);
+            EndMode3D();
 
-        BoundingBox bb = GetMeshBoundingBox(golova.meshes[0]);
-
-        GuiDrawRectangle((Rectangle){20, 20, 340, 500}, 2, BLANK, RAYWHITE);
-        GuiSlider((Rectangle){ 30, 30, 300, 15 }, NULL, TextFormat("%0.2f", xt), &xt, -1.0f, 1.0f);
-        GuiSlider((Rectangle){ 30, 50, 300, 15 }, NULL, TextFormat("%0.2f", yt), &yt, -1.0f, 1.0f);
-        GuiSlider((Rectangle){ 30, 70, 300, 15 }, NULL, TextFormat("%0.2f", zt), &zt, -1.0f, 1.0f);
-
-        GuiSlider((Rectangle){ 30, 100, 300, 15 }, NULL, TextFormat("%0.2f", xr), &xr, -90.0f, 90.0f);
-        GuiSlider((Rectangle){ 30, 120, 300, 15 }, NULL, TextFormat("%0.2f", yr), &yr, -90.0f, 90.0f);
-        GuiSlider((Rectangle){ 30, 140, 300, 15 }, NULL, TextFormat("%0.2f", zr), &zr, -90.0f, 90.0f);
-
-        Matrix t = MatrixTranslate(xt, yt, zt);
-        Matrix r = MatrixRotateXYZ((Vector3){ DEG2RAD*xr, DEG2RAD*yr, DEG2RAD*zr });
-        golova.transform = MatrixMultiply(r, t);
-
+            BeginMode3D(camera);
+                rlSetLineWidth(4.0);
+                BeginShaderMode(shader);
+                    SetShaderValue(shader, camera_pos_loc, &camera.position, SHADER_UNIFORM_VEC3);
+                    SetShaderValue(shader, gizmo_pos_loc, &center, SHADER_UNIFORM_VEC3);
+                    DrawCircle3D(center, radius, (Vector3){0.0, 1.0, 0.0}, 90.0, RED);
+                    DrawCircle3D(center, radius, (Vector3){1.0, 0.0, 0.0}, 90.0, GREEN);
+                    DrawCircle3D(center, radius, (Vector3){1.0, 0.0, 0.0}, 0.0, BLUE);
+                EndShaderMode();
+            EndMode3D();
         EndDrawing();
     }
 
-    UnloadShader(ground_shader);
-    UnloadModel(golova);
     CloseWindow();
 
     return 0;
