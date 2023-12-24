@@ -1,7 +1,5 @@
 .PHONY: all clean
 
-PROJECT_NAME = golova
-
 CC = gcc
 CURR_DIR=$(shell pwd)
 DEPS_PATH=$(CURR_DIR)/deps
@@ -26,20 +24,30 @@ RAYGUI_ARCHIVE_PATH=$(DEPS_PATH)/$(RAYGUI_NAME).tar.gz
 RAYGUI_SRC_PATH=$(RAYGUI_PATH)/src
 
 # ------------------------------------------------------------------------
-# Crossover
+# Golova
 LIB_PATHS = -L$(RAYLIB_BUILD_PATH)
 INC_PATHS = -I$(RAYLIB_SRC_PATH) -I$(RAYGUI_SRC_PATH)
 CFLAGS = -Wall -std=c99 -Wno-missing-braces -Wunused-result
 LIBS = -lraylib -lGL -lm -lpthread -ldl -lrt -lX11
 
 SRCS = $(shell find ./src -type f -name '*.c')
-HDRS = $(shell find ./src -type f -name '*.h')
 OBJS = $(patsubst %.c, $(BUILD_PATH)/%.o, $(SRCS))
 
+BIN_SRCS = $(shell find ./bin -type f -name '*.c')
+BIN_NAMES = $(patsubst ./bin/%.c, %, $(BIN_SRCS))
+
+# ------------------------------------------------------------------------
+# Targets
 all: \
 	raylib \
-	raygui \
-	$(PROJECT_NAME)
+	$(BIN_NAMES)
+
+$(BIN_NAMES): %: $(BUILD_PATH)/bin/%.o $(OBJS); \
+	$(CC) $(CFLAGS) -o ./build/bin/$@ $^ $(LIB_PATHS) $(LIBS)
+
+$(BUILD_PATH)/%.o: %.c; \
+	$(shell mkdir -p `dirname $@`) \
+	$(CC) $(INC_PATHS) -c -o $@ $<
 
 raylib: SHELL:=/bin/bash
 raylib:
@@ -55,18 +63,7 @@ raylib:
 			RAYLIB_INSTALL_PATH=$(RAYLIB_BUILD_PATH) \
 			RAYLIB_H_INSTALL_PATH=$(RAYLIB_BUILD_PATH); \
 	fi
-
-raygui: SHELL:=/bin/bash
-raygui:
 	if [ ! -d $(RAYGUI_PATH) ]; then \
 		wget $(RAYGUI_URL) -O $(RAYGUI_ARCHIVE_PATH); \
 		tar zxvf $(RAYGUI_ARCHIVE_PATH) -C $(DEPS_PATH); \
 	fi
-
-$(PROJECT_NAME): $(OBJS); \
-	$(CC) $(CFLAGS) -o $(PROJECT_NAME) $^ $(LIB_PATHS) $(LIBS)
-
-$(BUILD_PATH)/%.o: %.c; \
-	$(shell mkdir -p `dirname $@`) \
-	$(CC) $(INC_PATHS) -c -o $@ $<
-

@@ -6,6 +6,8 @@
 #include <stddef.h>
 #include <stdio.h>
 
+#include "../src/editor/gizmo.h"
+
 #define RAYGUI_IMPLEMENTATION
 #include "raygui.h"
 #undef RAYGUI_IMPLEMENTATION
@@ -72,7 +74,6 @@ int main(void) {
     camera.up = (Vector3){0.0f, 1.0f, 0.0f};
     camera.projection = CAMERA_PERSPECTIVE;
 
-
     Shader ground_shader = LoadShader(0, "resources/shaders/ground.frag");
     Model golova = golova_create();
 
@@ -95,25 +96,10 @@ int main(void) {
         BeginMode3D(camera);
             editor_draw_grid();
             DrawModel(golova, (Vector3){0.0, 0.0, 0.0}, 1.0, WHITE);
-
-            // -----------------------------------------------------------
-            // Draw ground:
-            // BeginShaderMode(ground_shader);
-            // rlPushMatrix();
-            //     rlTranslatef(0.0f, -5.0f, 0.0f);
-            //     rlRotatef(-45.0f, 1.0f, 0.0f, 0.0f);
-            //     rlScalef(5.0, 6.0f, 1.0f);
-            //     rlBegin(RL_QUADS);
-            //         rlColor4ub(255, 0, 0, 255);
-            //         rlTexCoord2f(0.0f, 0.0f); rlVertex3f(-1.0, -1.0, 0.0);  // BL
-            //         rlTexCoord2f(1.0f, 0.0f); rlVertex3f(1.0, -1.0, 0.0);  // BR
-            //         rlTexCoord2f(1.0f, 1.0f); rlVertex3f(1.0, 1.0, 0.0);  // TR
-            //         rlTexCoord2f(0.0f, 1.0f); rlVertex3f(-1.0, 1.0, 0.0);  // TL
-            //     rlEnd();
-            // rlPopMatrix();
-            // EndShaderMode();
-        
         EndMode3D();
+
+
+        BoundingBox bb = GetMeshBoundingBox(golova.meshes[0]);
 
         GuiDrawRectangle((Rectangle){20, 20, 340, 500}, 2, BLANK, RAYWHITE);
         GuiSlider((Rectangle){ 30, 30, 300, 15 }, NULL, TextFormat("%0.2f", xt), &xt, -1.0f, 1.0f);
