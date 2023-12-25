@@ -1,4 +1,5 @@
 #include <raylib.h>
+#include <raymath.h>
 
 
 RayCollision get_ray_collision_plane(Ray ray, Vector3 plane_point, Vector3 plane_normal) {
@@ -30,4 +31,23 @@ RayCollision get_ray_collision_plane(Ray ray, Vector3 plane_point, Vector3 plane
 
     collision.hit = true;
     return collision;
+}
+
+float vec2_angle(Vector2 v1, Vector2 v2) {
+    static float eps = 0.00001;
+    Vector2 v1_norm = Vector2Normalize(v1);
+    Vector2 v2_norm = Vector2Normalize(v2);
+    float dot = Vector2DotProduct(v1_norm, v2_norm);
+    if (1.0 - fabs(dot) < eps) {
+        return 0.0;
+    }
+    float angle = acos(dot);
+    float z = v1.x * v2.y - v1.y * v2.x;
+    if (fabs(z) < eps) {
+        return 0.0;
+    } else if (z > 0) {
+        return angle;
+    } else {
+        return -angle;
+    }
 }

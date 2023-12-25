@@ -47,7 +47,7 @@ int main(void) {
 
     Gizmo gizmo = {0};
 
-    Vector3 position = {0};
+    Vector3 position = {1.0, 1.0, 1.0};
     Vector3 rotation = {0};
     Model cube = LoadModelFromMesh(GenMeshCube(1.0, 1.0, 1.0));
  
@@ -56,15 +56,18 @@ int main(void) {
         Vector3 center = Vector3Scale(Vector3Add(bbox.min, bbox.max), 0.5);
 
         camera_update(&camera);
-        gizmo_update(&gizmo, camera, &position, &rotation);
+        Matrix transform = gizmo_update(&gizmo, camera, &position);
+        cube.transform = MatrixMultiply(cube.transform, transform);
 
         BeginDrawing();
             ClearBackground(DARKGRAY);
             rlEnableDepthTest();
 
             BeginMode3D(camera);
-                DrawModel(cube, (Vector3){0.0, 0.0, 0.0}, 1.0, ORANGE);
+                DrawModel(cube, position, 1.0, ORANGE);
             EndMode3D();
+
+            gizmo_draw(&gizmo, camera, position);
 
             BeginMode3D(camera);
                 rlSetLineWidth(1.0);

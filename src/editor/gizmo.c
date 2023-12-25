@@ -16,44 +16,41 @@ static float get_gizmo_radius(Camera3D camera, Vector3 position) {
     return Vector3Distance(camera.position, position) / GIZMO_SIZE;
 }
 
-void gizmo_update(Gizmo *gizmo, Camera3D camera, Vector3 *position, Vector3 *rotation) {
+Matrix gizmo_update(Gizmo *gizmo, Camera3D camera, Vector3 *position) {
 
     if (!IsMouseButtonDown(0)) {
-        gizmo->state = GIZMO_IDLE;
+        gizmo->state = GIZMO_COLD;
+        gizmo->active_axis = Vector3Zero();
     }
 
+    Matrix transform = MatrixIdentity();
     float radius = get_gizmo_radius(camera, *position);
     Ray mouse_ray = GetMouseRay(GetMousePosition(), camera);
     RayCollision mouse_ray_collision = GetRayCollisionSphere(mouse_ray, *position, radius);
-    if (gizmo->state != GIZMO_ROT && mouse_ray_collision.hit) {
-        if (fabsf(mouse_ray_collision.point.x / radius) < GIZMO_ROT_HANDLE_THICKNESS) {
-            gizmo->active_axis = GIZMO_AXIS_X;
-            gizmo->state = GIZMO_HOVER_ROT;
-            gizmo->start_angle = rotation->x;
-        } else if (fabsf(mouse_ray_collision.point.y / radius) < GIZMO_ROT_HANDLE_THICKNESS) {
-            gizmo->active_axis = GIZMO_AXIS_Y;
-            gizmo->state = GIZMO_HOVER_ROT;
-            gizmo->start_angle = rotation->y;
-        } else if (fabsf(mouse_ray_collision.point.z / radius) < GIZMO_ROT_HANDLE_THICKNESS) {
-            gizmo->active_axis = GIZMO_AXIS_Z;
-            gizmo->state = GIZMO_HOVER_ROT;
-            gizmo->start_angle = rotation->z;
+    if (gizmo->state != GIZMO_ACTIVE_ROT && mouse_ray_collision.hit) {  
+        if (fabsf((mouse_ray_collision.point.x - position->x) / radius) < GIZMO_ROT_CIRCLE_THICKNESS) {
+            gizmo->active_axis = (Vector3){1.0, 0.0, 0.0};
+            gizmo->state = GIZMO_HOT_ROT;
+        } else if (fabsf((mouse_ray_collision.point.y - position->y) / radius) < GIZMO_ROT_CIRCLE_THICKNESS) {
+            gizmo->active_axis = (Vector3){0.0, 1.0, 0.0};
+            gizmo->state = GIZMO_HOT_ROT;
+        } else if (fabsf((mouse_ray_collision.point.z - position->z) / radius) < GIZMO_ROT_CIRCLE_THICKNESS) {
+            gizmo->active_axis = (Vector3){0.0, 0.0, 1.0};
+            gizmo->state = GIZMO_HOT_ROT;
         }
 
-
-        if (gizmo->state == GIZMO_HOVER_ROT && IsMouseButtonDown(0)) {
-            gizmo->state = GIZMO_ROT;
-            gizmo->start_rot_handle = Vector3Subtract(mouse_ray_collision.point, *position);
+        if (gizmo->state == GIZMO_HOT_ROT && IsMouseButtonDown(0)) {
+            gizmo->state = GIZMO_ACTIVE_ROT;
         }
-    } else if (gizmo->state == GIZMO_ROT) {
-        printf("rotation!\n");
-        // RayCollision collision = get_ray_collision_plane(mouse_ray, position, rotation_axis);
-        // if (collision.hit) {
-        //     Vector3 rotation_handle_end = Vector3Subtract(collision.point, center);
-        //     *current_angle = start_angle + Vector3Angle(rotation_handle_start, rotation_handle_end); 
-        //     printf("%f\n", *current_angle);
-        // }
+    } else if (gizmo->state == GIZMO_ACTIVE_ROT) {
+        Vector2 rot_center = GetWorldToScreen(*position, camera);
+        Vector2 p1 = Vector2Subtract(GetMousePosition(), rot_center);
+        Vector2 p0 = Vector2Subtract(p1, GetMouseDelta());
+        float angle = vec2_angle(p1, p0);
+        transform = MatrixRotate(gizmo->active_axis, angle);
     }
+
+    return transform;
 }
 
 void gizmo_draw(Gizmo *gizmo, Camera3D camera, Vector3 position) {
@@ -66,19 +63,14 @@ void gizmo_draw(Gizmo *gizmo, Camera3D camera, Vector3 position) {
 
     float radius = get_gizmo_radius(camera, position);
 
-    Color x_color = RED;
-    Color y_color = GREEN;
-    Color z_color = BLUE;
-
-    if (gizmo->state == GIZMO_HOVER_ROT) {
-        if (gizmo->active_axis == GIZMO_AXIS_X) x_color = WHITE;
-        else if (gizmo->active_axis == GIZMO_AXIS_Y) y_color = WHITE;
-        else if (gizmo->active_axis == GIZMO_AXIS_Z) z_color = WHITE;
-    }
+    Color x_color = gizmo->active_axis.x == 1.0 ? WHITE : RED;
+    Color y_color = gizmo->active_axis.y == 1.0 ? WHITE : GREEN;
+    Color z_color = gizmo->active_axis.z == 1.0 ? WHITE : BLUE;
 
     BeginMode3D(camera);
-        rlSetLineWidth(GIZMO_ROT_HANDLE_DRAW_THICKNESS);
+        rlSetLineWidth(GIZMO_ROT_CIRCLE_DRAW_THICKNESS);
         rlDisableDepthTest();
+
         BeginShaderMode(shader);
             SetShaderValue(shader, CAMERA_POS_LOC, &camera.position, SHADER_UNIFORM_VEC3);
             SetShaderValue(shader, GIZMO_POS_LOC, &position, SHADER_UNIFORM_VEC3);
@@ -87,4 +79,11 @@ void gizmo_draw(Gizmo *gizmo, Camera3D camera, Vector3 position) {
             DrawCircle3D(position, radius, (Vector3){1.0, 0.0, 0.0}, 0.0, z_color);
         EndShaderMode();
     EndMode3D();
+
+    if (gizmo->state == GIZMO_ACTIVE_ROT) {
+        rlSetLineWidth(GIZMO_ROT_HANDLE_DRAW_THICKNESS);
+        Vector2 p0 = GetWorldToScreen(position, camera);
+        Vector2 p1 = GetMousePosition();
+        DrawLineV(p0, p1, WHITE);
+    }
 }
