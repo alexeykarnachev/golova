@@ -6,6 +6,9 @@ typedef enum GizmoState {
 
     GIZMO_HOT_ROT,
     GIZMO_ACTIVE_ROT,
+
+    GIZMO_HOT_AXIS,
+    GIZMO_ACTIVE_AXIS,
 } GizmoState;
 
 void GizmoLoad();
@@ -23,9 +26,9 @@ Matrix GizmoUpdate(Camera3D camera, Vector3 position);
 #define MASK_FRAMEBUFFER_WIDTH 500.0
 #define MASK_FRAMEBUFFER_HEIGHT 500.0
 
-#define GIZMO_SIZE 10.0f
+#define GIZMO_SIZE 0.12f
 #define GIZMO_ROT_CIRCLE_THICKNESS 0.1f
-#define GIZMO_ROT_CIRCLE_DRAW_THICKNESS 4.0f
+#define GIZMO_ROT_CIRCLE_DRAW_THICKNESS 5.0f
 #define GIZMO_ROT_HANDLE_DRAW_THICKNESS 2.0f
 
 #define X_AXIS (Vector3){1.0, 0.0, 0.0}
@@ -69,12 +72,13 @@ static int SHADER_ROT_HANDLE_GIZMO_POS_LOC;
 static bool GIZMO_LOADED;
 
 static GizmoState GIZMO_STATE;
-static Vector3 GIZMO_ACTIVE_AXIS;
+static Vector3 GIZMO_CURRENT_AXIS;
 
 static unsigned int MASK_FRAMEBUFFER;
 static unsigned int MASK_TEXTURE;
 
 static float Vector2WrapAngle(Vector2 v1, Vector2 v2);
+static RayCollision GetRayCollisionPlane(Ray ray, Vector3 plane_point, Vector3 plane_normal);
 
 void GizmoLoad() {
     if (GIZMO_LOADED) {
@@ -109,20 +113,26 @@ Matrix GizmoUpdate(Camera3D camera, Vector3 position) {
         exit(1);
     }
 
-    Vector2 mouse_position = GetMousePosition();
+    Matrix transform = MatrixIdentity();
+    Vector2 mouse_delta = GetMouseDelta();
+    Vector2 curr_mouse_position = GetMousePosition();
+    Vector2 prev_mouse_position = Vector2Subtract(curr_mouse_position, mouse_delta);
 
-    float radius = Vector3Distance(camera.position, position) / GIZMO_SIZE;
+    float radius = GIZMO_SIZE * Vector3Distance(camera.position, position);
     float axis_handle_length = radius * 1.2;
     float axis_handle_tip_length = radius * 0.3;
     float axis_handle_tip_radius = radius * 0.1;
 
-    Color rot_handle_color_x = RED;
-    Color rot_handle_color_y = GREEN;
-    Color rot_handle_color_z = BLUE;
+    Color color_x = RED;
+    Color color_y = GREEN;
+    Color color_z = BLUE;
 
     Color rot_handle_mask_x = (Color){1, 0, 0, 0};
     Color rot_handle_mask_y = (Color){2, 0, 0, 0};
     Color rot_handle_mask_z = (Color){3, 0, 0, 0};
+    Color axis_handle_mask_x = (Color){4, 0, 0, 0};
+    Color axis_handle_mask_y = (Color){5, 0, 0, 0};
+    Color axis_handle_mask_z = (Color){6, 0, 0, 0};
 
     Vector3 axis_handle_tip_start_x = Vector3Add(position, Vector3Scale(X_AXIS, axis_handle_length));
     Vector3 axis_handle_tip_start_y = Vector3Add(position, Vector3Scale(Y_AXIS, axis_handle_length));
@@ -131,6 +141,7 @@ Matrix GizmoUpdate(Camera3D camera, Vector3 position) {
     Vector3 axis_handle_tip_end_x = Vector3Add(axis_handle_tip_start_x, Vector3Scale(X_AXIS, axis_handle_tip_length));
     Vector3 axis_handle_tip_end_y = Vector3Add(axis_handle_tip_start_y, Vector3Scale(Y_AXIS, axis_handle_tip_length));
     Vector3 axis_handle_tip_end_z = Vector3Add(axis_handle_tip_start_z, Vector3Scale(Z_AXIS, axis_handle_tip_length));
+
 
     // -------------------------------------------------------------------
     // Draw gizmo to the mask buffer (for pixel picking)
@@ -149,11 +160,19 @@ Matrix GizmoUpdate(Camera3D camera, Vector3 position) {
             DrawCircle3D(position, radius, X_AXIS, 90.0, rot_handle_mask_y);
             DrawCircle3D(position, radius, X_AXIS, 0.0, rot_handle_mask_z);
         EndShaderMode();
+
+        DrawLine3D(position, axis_handle_tip_start_x, axis_handle_mask_x);
+        DrawLine3D(position, axis_handle_tip_start_y, axis_handle_mask_y);
+        DrawLine3D(position, axis_handle_tip_start_z, axis_handle_mask_z);
+
+        DrawCylinderEx(axis_handle_tip_start_x, axis_handle_tip_end_x, axis_handle_tip_radius, 0.0, 16, axis_handle_mask_x);
+        DrawCylinderEx(axis_handle_tip_start_y, axis_handle_tip_end_y, axis_handle_tip_radius, 0.0, 16, axis_handle_mask_y);
+        DrawCylinderEx(axis_handle_tip_start_z, axis_handle_tip_end_z, axis_handle_tip_radius, 0.0, 16, axis_handle_mask_z);
     EndMode3D();
 
     unsigned char *pixels = (unsigned char*)rlReadTexturePixels(MASK_TEXTURE, MASK_FRAMEBUFFER_WIDTH, MASK_FRAMEBUFFER_HEIGHT, RL_PIXELFORMAT_UNCOMPRESSED_R8G8B8A8);
-    int x = (int)(MASK_FRAMEBUFFER_WIDTH * (mouse_position.x / (float)GetScreenWidth()));
-    int y = (int)(MASK_FRAMEBUFFER_HEIGHT * (1.0 - (mouse_position.y / (float)GetScreenHeight())));
+    int x = (int)(MASK_FRAMEBUFFER_WIDTH * Clamp(curr_mouse_position.x / (float)GetScreenWidth(), 0.0, 1.0));
+    int y = (int)(MASK_FRAMEBUFFER_HEIGHT * Clamp(1.0 - (curr_mouse_position.y / (float)GetScreenHeight()), 0.0, 1.0));
     int idx = 4 * (y * MASK_FRAMEBUFFER_WIDTH + x);
     unsigned char mask_val = pixels[idx];
 
@@ -163,48 +182,90 @@ Matrix GizmoUpdate(Camera3D camera, Vector3 position) {
     rlEnableColorBlend();
     rlViewport(0, 0, GetScreenWidth(), GetScreenHeight());
 
-
     // -------------------------------------------------------------------
     // Update gizmo CPU logic
-    Matrix transform = MatrixIdentity();
 
     if (!IsMouseButtonDown(0)) {
         GIZMO_STATE = GIZMO_COLD;
-        GIZMO_ACTIVE_AXIS = Vector3Zero();
+        GIZMO_CURRENT_AXIS = Vector3Zero();
     }
 
-    if (GIZMO_STATE != GIZMO_ACTIVE_ROT) {  
+    if (GIZMO_STATE != GIZMO_ACTIVE_ROT && GIZMO_STATE != GIZMO_ACTIVE_AXIS) {  
         if (mask_val == rot_handle_mask_x.r) {
-            GIZMO_ACTIVE_AXIS = X_AXIS;
+            GIZMO_CURRENT_AXIS = X_AXIS;
             GIZMO_STATE = GIZMO_HOT_ROT;
         } else if (mask_val == rot_handle_mask_y.r) {
-            GIZMO_ACTIVE_AXIS = Y_AXIS;
+            GIZMO_CURRENT_AXIS = Y_AXIS;
             GIZMO_STATE = GIZMO_HOT_ROT;
         } else if (mask_val == rot_handle_mask_z.r) {
-            GIZMO_ACTIVE_AXIS = Z_AXIS;
+            GIZMO_CURRENT_AXIS = Z_AXIS;
             GIZMO_STATE = GIZMO_HOT_ROT;
+        } else if (mask_val == axis_handle_mask_x.r) {
+            GIZMO_CURRENT_AXIS = X_AXIS;
+            GIZMO_STATE = GIZMO_HOT_AXIS;
+        } else if (mask_val == axis_handle_mask_y.r) {
+            GIZMO_CURRENT_AXIS = Y_AXIS;
+            GIZMO_STATE = GIZMO_HOT_AXIS;
+        } else if (mask_val == axis_handle_mask_z.r) {
+            GIZMO_CURRENT_AXIS = Z_AXIS;
+            GIZMO_STATE = GIZMO_HOT_AXIS;
         }
 
         if (GIZMO_STATE == GIZMO_HOT_ROT && IsMouseButtonDown(0)) {
             GIZMO_STATE = GIZMO_ACTIVE_ROT;
+        } else if (GIZMO_STATE == GIZMO_HOT_AXIS && IsMouseButtonDown(0)) {
+            GIZMO_STATE = GIZMO_ACTIVE_AXIS;
         }
     } else if (GIZMO_STATE == GIZMO_ACTIVE_ROT) {
         Vector2 rot_center = GetWorldToScreen(position, camera);
-        Vector2 p1 = Vector2Subtract(mouse_position, rot_center);
-        Vector2 p0 = Vector2Subtract(p1, GetMouseDelta());
+        Vector2 p1 = Vector2Subtract(curr_mouse_position, rot_center);
+        Vector2 p0 = Vector2Subtract(p1, mouse_delta);
         float angle = Vector2WrapAngle(p1, p0);
-        transform = MatrixRotate(GIZMO_ACTIVE_AXIS, angle);
+        transform = MatrixMultiply(
+                MatrixMultiply(
+                    MatrixTranslate(-position.x, -position.y, -position.z),
+                    MatrixRotate(GIZMO_CURRENT_AXIS, angle)
+                ),
+                MatrixTranslate(position.x, position.y, position.z)
+        );
+    } else if (GIZMO_STATE == GIZMO_ACTIVE_AXIS) {
+        Vector3 normal;
+        if (GIZMO_CURRENT_AXIS.x == 1.0) {
+            normal = Y_AXIS;
+        } else if (GIZMO_CURRENT_AXIS.y == 1.0) {
+            normal = Z_AXIS;
+        } else if (GIZMO_CURRENT_AXIS.z == 1.0) {
+            normal = Y_AXIS;
+        }
+        Vector2 ps = GetWorldToScreen(position, camera);
+        Vector2 new_ps = Vector2Add(ps, mouse_delta);
+        Ray r = GetMouseRay(new_ps, camera);
+        RayCollision c = GetRayCollisionPlane(r, position, normal);
+
+        Vector3 offset = Vector3Multiply(Vector3Subtract(c.point, position), GIZMO_CURRENT_AXIS);
+
+        transform = MatrixTranslate(offset.x, offset.y, offset.z);
     }
 
     // -------------------------------------------------------------------
     // Draw gizmo
-    rot_handle_color_x = GIZMO_ACTIVE_AXIS.x == 1.0 ? WHITE : rot_handle_color_x;
-    rot_handle_color_y = GIZMO_ACTIVE_AXIS.y == 1.0 ? WHITE : rot_handle_color_y;
-    rot_handle_color_z = GIZMO_ACTIVE_AXIS.z == 1.0 ? WHITE : rot_handle_color_z;
+    Color rot_handle_color_x = color_x;
+    Color rot_handle_color_y = color_y;
+    Color rot_handle_color_z = color_z;
+    if (GIZMO_STATE == GIZMO_ACTIVE_ROT || GIZMO_STATE == GIZMO_HOT_ROT) {
+        if (GIZMO_CURRENT_AXIS.x == 1.0) rot_handle_color_x = WHITE;
+        if (GIZMO_CURRENT_AXIS.y == 1.0) rot_handle_color_y = WHITE;
+        if (GIZMO_CURRENT_AXIS.z == 1.0) rot_handle_color_z = WHITE;
+    }
 
-    Color axis_handle_color_x = RED;
-    Color axis_handle_color_y = GREEN;
-    Color axis_handle_color_z = BLUE;
+    Color axis_handle_color_x = color_x;
+    Color axis_handle_color_y = color_y;
+    Color axis_handle_color_z = color_z;
+    if (GIZMO_STATE == GIZMO_ACTIVE_AXIS || GIZMO_STATE == GIZMO_HOT_AXIS) {
+        if (GIZMO_CURRENT_AXIS.x == 1.0) axis_handle_color_x = WHITE;
+        if (GIZMO_CURRENT_AXIS.y == 1.0) axis_handle_color_y = WHITE;
+        if (GIZMO_CURRENT_AXIS.z == 1.0) axis_handle_color_z = WHITE;
+    }
 
     BeginMode3D(camera);
         rlSetLineWidth(GIZMO_ROT_CIRCLE_DRAW_THICKNESS);
@@ -227,15 +288,17 @@ Matrix GizmoUpdate(Camera3D camera, Vector3 position) {
         DrawCylinderEx(axis_handle_tip_start_z, axis_handle_tip_end_z, axis_handle_tip_radius, 0.0, 16, axis_handle_color_z);
     EndMode3D();
 
-    if (GIZMO_STATE == GIZMO_ACTIVE_ROT) {
+    if (GIZMO_STATE == GIZMO_ACTIVE_ROT || GIZMO_STATE == GIZMO_ACTIVE_AXIS) {
         rlSetLineWidth(GIZMO_ROT_HANDLE_DRAW_THICKNESS);
 
-        Vector3 half_axis_line = Vector3Scale(GIZMO_ACTIVE_AXIS, 1000.0);
+        Vector3 half_axis_line = Vector3Scale(GIZMO_CURRENT_AXIS, 1000.0);
         BeginMode3D(camera);
             DrawLine3D(Vector3Subtract(position, half_axis_line), Vector3Add(position, half_axis_line), WHITE);
         EndMode3D();
 
-        DrawLineV(GetWorldToScreen(position, camera), mouse_position, WHITE);
+        if (GIZMO_STATE == GIZMO_ACTIVE_ROT) {
+            DrawLineV(GetWorldToScreen(position, camera), curr_mouse_position, WHITE);
+        }
     }
 
     return transform;
@@ -259,6 +322,37 @@ static float Vector2WrapAngle(Vector2 v1, Vector2 v2) {
     } else {
         return -angle;
     }
+}
+
+static RayCollision GetRayCollisionPlane(Ray ray, Vector3 plane_point, Vector3 plane_normal) {
+    RayCollision collision = {0};
+
+    // Calculate the parameter t
+    float denominator = ray.direction.x * plane_normal.x +
+                        ray.direction.y * plane_normal.y +
+                        ray.direction.z * plane_normal.z;
+
+    if (denominator == 0) {
+        // Ray is parallel to the plane, no collision
+        return collision;
+    }
+
+    float t = ((plane_point.x - ray.position.x) * plane_normal.x +
+               (plane_point.y - ray.position.y) * plane_normal.y +
+               (plane_point.z - ray.position.z) * plane_normal.z) / denominator;
+
+    if (t < 0) {
+        // Intersection point is behind the ray's starting point, no collision
+        return collision;
+    }
+
+    // Calculate the collision point
+    collision.point.x = ray.position.x + t * ray.direction.x;
+    collision.point.y = ray.position.y + t * ray.direction.y;
+    collision.point.z = ray.position.z + t * ray.direction.z;
+    collision.hit = true;
+
+    return collision;
 }
 
 #endif

@@ -49,7 +49,6 @@ int main(void) {
     camera.up = (Vector3){0.0f, 1.0f, 0.0f};
     camera.projection = CAMERA_PERSPECTIVE;
 
-    Vector3 position = {1.0, 1.0, 1.0};
     Vector3 rotation = {0};
     Model cube = LoadModelFromMesh(GenMeshCube(1.0, 1.0, 1.0));
 
@@ -66,7 +65,7 @@ int main(void) {
             rlEnableDepthTest();
 
             BeginMode3D(camera);
-                DrawModel(cube, position, 1.0, ORANGE);
+                DrawModel(cube, (Vector3){0.0, 0.0, 0.0}, 1.0, ORANGE);
             EndMode3D();
 
             BeginMode3D(camera);
@@ -74,6 +73,7 @@ int main(void) {
                 DrawGrid(100.0, 1.0);
             EndMode3D();
 
+            Vector3 position = {cube.transform.m12, cube.transform.m13, cube.transform.m14};
             cube.transform = MatrixMultiply(cube.transform, GizmoUpdate(camera, position));
 
             BeginMode3D(camera);
