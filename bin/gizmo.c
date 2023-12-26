@@ -1,10 +1,13 @@
 #include "raylib.h"
 #include "raymath.h"
 #include "rcamera.h"
-#include "../src/editor/gizmo.h"
 #include <math.h>
 #include <rlgl.h>
 #include <stdio.h>
+
+#define RAYGIZMO_IMPLEMENTATION
+#include "../src/editor/gizmo.h"
+#undef RAYGIZMO_IMPLEMENTATION
 
 void camera_update(Camera3D *camera) {
     float rot_speed = 0.15f;
@@ -45,8 +48,6 @@ int main(void) {
     camera.up = (Vector3){0.0f, 1.0f, 0.0f};
     camera.projection = CAMERA_PERSPECTIVE;
 
-    Gizmo gizmo = {0};
-
     Vector3 position = {1.0, 1.0, 1.0};
     Vector3 rotation = {0};
     Model cube = LoadModelFromMesh(GenMeshCube(1.0, 1.0, 1.0));
@@ -56,8 +57,6 @@ int main(void) {
         Vector3 center = Vector3Scale(Vector3Add(bbox.min, bbox.max), 0.5);
 
         camera_update(&camera);
-        Matrix transform = gizmo_update(&gizmo, camera, &position);
-        cube.transform = MatrixMultiply(cube.transform, transform);
 
         BeginDrawing();
             ClearBackground(DARKGRAY);
@@ -67,7 +66,8 @@ int main(void) {
                 DrawModel(cube, position, 1.0, ORANGE);
             EndMode3D();
 
-            gizmo_draw(&gizmo, camera, position);
+            Matrix transform = GizmoUpdate(camera, position);
+            cube.transform = MatrixMultiply(cube.transform, transform);
 
             BeginMode3D(camera);
                 rlSetLineWidth(1.0);
@@ -80,8 +80,6 @@ int main(void) {
                 DrawLine3D((Vector3){0.0f, -50.0f, 0.0f}, (Vector3){0.0f, 50.0f, 0.0f}, GREEN);
                 DrawLine3D((Vector3){0.0f, 0.0f, -50.0f}, (Vector3){0.0f, 0.0f, 50.0f}, DARKBLUE);
             EndMode3D();
-
-            gizmo_draw(&gizmo, camera, position);
 
         EndDrawing();
     }
