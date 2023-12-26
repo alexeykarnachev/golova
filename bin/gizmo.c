@@ -13,7 +13,8 @@ void camera_update(Camera3D *camera) {
     float rot_speed = 0.15f;
     float move_speed = 0.5f;
     float zoom_speed = 50.0f;
-    float dt = GetFrameTime();
+    // float dt = GetFrameTime();
+    float dt = 0.02;
 
     bool is_middle = IsMouseButtonDown(2);
     bool is_shift = IsKeyDown(KEY_LEFT_SHIFT);
@@ -51,6 +52,8 @@ int main(void) {
     Vector3 position = {1.0, 1.0, 1.0};
     Vector3 rotation = {0};
     Model cube = LoadModelFromMesh(GenMeshCube(1.0, 1.0, 1.0));
+
+    GizmoLoad();
  
     while (!WindowShouldClose()) {
         BoundingBox bbox = GetMeshBoundingBox(cube.meshes[0]);
@@ -66,13 +69,12 @@ int main(void) {
                 DrawModel(cube, position, 1.0, ORANGE);
             EndMode3D();
 
-            Matrix transform = GizmoUpdate(camera, position);
-            cube.transform = MatrixMultiply(cube.transform, transform);
-
             BeginMode3D(camera);
                 rlSetLineWidth(1.0);
                 DrawGrid(100.0, 1.0);
             EndMode3D();
+
+            cube.transform = MatrixMultiply(cube.transform, GizmoUpdate(camera, position));
 
             BeginMode3D(camera);
                 rlSetLineWidth(2.0);
@@ -80,6 +82,8 @@ int main(void) {
                 DrawLine3D((Vector3){0.0f, -50.0f, 0.0f}, (Vector3){0.0f, 50.0f, 0.0f}, GREEN);
                 DrawLine3D((Vector3){0.0f, 0.0f, -50.0f}, (Vector3){0.0f, 0.0f, 50.0f}, DARKBLUE);
             EndMode3D();
+
+            DrawFPS(0, 0);
 
         EndDrawing();
     }
