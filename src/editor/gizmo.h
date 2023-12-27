@@ -23,6 +23,9 @@ Matrix GizmoUpdate(Camera3D camera, Vector3 position);
 #include <rlgl.h>
 #include <stdio.h>
 
+#define MIN(a,b) (((a)<(b))?(a):(b))
+#define MAX(a,b) (((a)>(b))?(a):(b))
+
 #define MASK_FRAMEBUFFER_WIDTH 500.0
 #define MASK_FRAMEBUFFER_HEIGHT 500.0
 
@@ -79,6 +82,20 @@ static unsigned int MASK_TEXTURE;
 
 static float Vector2WrapAngle(Vector2 v1, Vector2 v2);
 static RayCollision GetRayCollisionPlane(Ray ray, Vector3 plane_point, Vector3 plane_normal);
+static int isect_line_plane(
+    Vector3 *out_p,
+    Vector3 line_p0,
+    Vector3 line_p1,
+    Vector3 plane_p,
+    Vector3 plane_normal
+);
+static int get_two_vecs_nearest_point(
+    Vector3 *vec0_out_nearest_point,
+    Vector3 vec0_p0,
+    Vector3 vec0_p1,
+    Vector3 vec1_p0,
+    Vector3 vec1_p1
+);
 
 void GizmoLoad() {
     if (GIZMO_LOADED) {
@@ -122,6 +139,8 @@ Matrix GizmoUpdate(Camera3D camera, Vector3 position) {
     float axis_handle_length = radius * 1.2;
     float axis_handle_tip_length = radius * 0.3;
     float axis_handle_tip_radius = radius * 0.1;
+    float handle_plane_offset = radius * 0.4;
+    Vector2 handle_plane_size = Vector2Scale(Vector2One(), radius * 0.2);
 
     Color color_x = RED;
     Color color_y = GREEN;
@@ -221,6 +240,14 @@ Matrix GizmoUpdate(Camera3D camera, Vector3 position) {
         Vector2 p1 = Vector2Subtract(curr_mouse_position, rot_center);
         Vector2 p0 = Vector2Subtract(p1, mouse_delta);
         float angle = Vector2WrapAngle(p1, p0);
+
+        if (
+            Vector3DotProduct(GIZMO_CURRENT_AXIS, position)
+            > Vector3DotProduct(GIZMO_CURRENT_AXIS, camera.position)
+        ) {
+            angle *= -1;
+        }
+
         transform = MatrixMultiply(
                 MatrixMultiply(
                     MatrixTranslate(-position.x, -position.y, -position.z),
@@ -235,15 +262,22 @@ Matrix GizmoUpdate(Camera3D camera, Vector3 position) {
         } else if (GIZMO_CURRENT_AXIS.y == 1.0) {
             normal = Z_AXIS;
         } else if (GIZMO_CURRENT_AXIS.z == 1.0) {
-            normal = Y_AXIS;
+            normal = X_AXIS;
         }
-        Vector2 ps = GetWorldToScreen(position, camera);
-        Vector2 new_ps = Vector2Add(ps, mouse_delta);
-        Ray r = GetMouseRay(new_ps, camera);
-        RayCollision c = GetRayCollisionPlane(r, position, normal);
 
-        Vector3 offset = Vector3Multiply(Vector3Subtract(c.point, position), GIZMO_CURRENT_AXIS);
+        Vector2 p = Vector2Add(GetWorldToScreen(position, camera), mouse_delta);
+        Ray r = GetMouseRay(p, camera);
+        Vector3 isect_p;
+        int is_isect = get_two_vecs_nearest_point(
+            &isect_p,
+            camera.position,
+            Vector3Add(camera.position, r.direction),
+            position,
+            Vector3Add(position, GIZMO_CURRENT_AXIS)
+        );
 
+        Vector3 offset = Vector3Subtract(isect_p, position);
+        offset = Vector3Multiply(offset, GIZMO_CURRENT_AXIS);
         transform = MatrixTranslate(offset.x, offset.y, offset.z);
     }
 
@@ -282,10 +316,115 @@ Matrix GizmoUpdate(Camera3D camera, Vector3 position) {
         DrawLine3D(position, axis_handle_tip_start_x, axis_handle_color_x);
         DrawLine3D(position, axis_handle_tip_start_y, axis_handle_color_y);
         DrawLine3D(position, axis_handle_tip_start_z, axis_handle_color_z);
-
         DrawCylinderEx(axis_handle_tip_start_x, axis_handle_tip_end_x, axis_handle_tip_radius, 0.0, 16, axis_handle_color_x);
         DrawCylinderEx(axis_handle_tip_start_y, axis_handle_tip_end_y, axis_handle_tip_radius, 0.0, 16, axis_handle_color_y);
         DrawCylinderEx(axis_handle_tip_start_z, axis_handle_tip_end_z, axis_handle_tip_radius, 0.0, 16, axis_handle_color_z);
+
+        rlDisableBackfaceCulling();
+
+        Vector3 tz = (Vector3){handle_plane_offset, handle_plane_offset, 0.0};
+        Vector3 tx = (Vector3){0.0, handle_plane_offset, handle_plane_offset};
+        Vector3 ty = (Vector3){handle_plane_offset, 0.0, handle_plane_offset};
+        Vector3 pz = Vector3Add(position, tz);
+        Vector3 px = Vector3Add(position, tx);
+        Vector3 py = Vector3Add(position, ty);
+        float dz = Vector3DistanceSqr(pz, camera.position);
+        float dx = Vector3DistanceSqr(px, camera.position);
+        float dy = Vector3DistanceSqr(py, camera.position);
+
+        if (dz <= MIN(dx, dy)) {
+            if (dx <= dy) {
+                rlPushMatrix();
+                    rlTranslatef(py.x, py.y, py.z);
+                    rlRotatef(90.0, 0.0, 1.0, 0.0);
+                    DrawPlane(Vector3Zero(), handle_plane_size, GREEN);
+                rlPopMatrix();
+                rlPushMatrix();
+                    rlTranslatef(px.x, px.y, px.z);
+                    rlRotatef(90.0, 0.0, 0.0, 1.0);
+                    DrawPlane(Vector3Zero(), handle_plane_size, RED);
+                rlPopMatrix();
+            } else {
+                rlPushMatrix();
+                    rlTranslatef(px.x, px.y, px.z);
+                    rlRotatef(90.0, 0.0, 0.0, 1.0);
+                    DrawPlane(Vector3Zero(), handle_plane_size, RED);
+                rlPopMatrix();
+                rlPushMatrix();
+                    rlTranslatef(py.x, py.y, py.z);
+                    rlRotatef(90.0, 0.0, 1.0, 0.0);
+                    DrawPlane(Vector3Zero(), handle_plane_size, GREEN);
+                rlPopMatrix();
+            }
+
+            rlPushMatrix();
+                rlTranslatef(pz.x, pz.y, pz.z);
+                rlRotatef(90.0, 1.0, 0.0, 0.0);
+                DrawPlane(Vector3Zero(), handle_plane_size, BLUE);
+            rlPopMatrix();
+        } else if (dx <= MIN(dz, dy)) {
+            if (dz <= dy) {
+                rlPushMatrix();
+                    rlTranslatef(py.x, py.y, py.z);
+                    rlRotatef(90.0, 0.0, 1.0, 0.0);
+                    DrawPlane(Vector3Zero(), handle_plane_size, GREEN);
+                rlPopMatrix();
+                rlPushMatrix();
+                    rlTranslatef(pz.x, pz.y, pz.z);
+                    rlRotatef(90.0, 1.0, 0.0, 0.0);
+                    DrawPlane(Vector3Zero(), handle_plane_size, BLUE);
+                rlPopMatrix();
+            } else {
+                rlPushMatrix();
+                    rlTranslatef(pz.x, pz.y, pz.z);
+                    rlRotatef(90.0, 1.0, 0.0, 0.0);
+                    DrawPlane(Vector3Zero(), handle_plane_size, BLUE);
+                rlPopMatrix();
+                rlPushMatrix();
+                    rlTranslatef(py.x, py.y, py.z);
+                    rlRotatef(90.0, 0.0, 1.0, 0.0);
+                    DrawPlane(Vector3Zero(), handle_plane_size, GREEN);
+                rlPopMatrix();
+            }
+
+            rlPushMatrix();
+                rlTranslatef(px.x, px.y, px.z);
+                rlRotatef(90.0, 0.0, 0.0, 1.0);
+                DrawPlane(Vector3Zero(), handle_plane_size, RED);
+            rlPopMatrix();
+        } else {
+            if (dz <= dx) {
+                rlPushMatrix();
+                    rlTranslatef(px.x, px.y, px.z);
+                    rlRotatef(90.0, 0.0, 0.0, 1.0);
+                    DrawPlane(Vector3Zero(), handle_plane_size, RED);
+                rlPopMatrix();
+                rlPushMatrix();
+                    rlTranslatef(pz.x, pz.y, pz.z);
+                    rlRotatef(90.0, 1.0, 0.0, 0.0);
+                    DrawPlane(Vector3Zero(), handle_plane_size, BLUE);
+                rlPopMatrix();
+            } else {
+                rlPushMatrix();
+                    rlTranslatef(pz.x, pz.y, pz.z);
+                    rlRotatef(90.0, 1.0, 0.0, 0.0);
+                    DrawPlane(Vector3Zero(), handle_plane_size, BLUE);
+                rlPopMatrix();
+                rlPushMatrix();
+                    rlTranslatef(px.x, px.y, px.z);
+                    rlRotatef(90.0, 0.0, 0.0, 1.0);
+                    DrawPlane(Vector3Zero(), handle_plane_size, RED);
+                rlPopMatrix();
+            }
+
+            rlPushMatrix();
+                rlTranslatef(py.x, py.y, py.z);
+                rlRotatef(90.0, 0.0, 1.0, 0.0);
+                DrawPlane(Vector3Zero(), handle_plane_size, GREEN);
+            rlPopMatrix();
+        }
+
+
     EndMode3D();
 
     if (GIZMO_STATE == GIZMO_ACTIVE_ROT || GIZMO_STATE == GIZMO_ACTIVE_AXIS) {
@@ -353,6 +492,49 @@ static RayCollision GetRayCollisionPlane(Ray ray, Vector3 plane_point, Vector3 p
     collision.hit = true;
 
     return collision;
+}
+
+static int isect_line_plane(
+    Vector3 *out_p,
+    Vector3 line_p0,
+    Vector3 line_p1,
+    Vector3 plane_p,
+    Vector3 plane_normal
+) {
+    static float eps = 0.00001;
+    Vector3 u = Vector3Subtract(line_p1, line_p0);
+    float dot = Vector3DotProduct(plane_normal, u);
+    if (fabs(dot) <= eps) {
+        return 0;
+    }
+
+    Vector3 w = Vector3Subtract(line_p0, plane_p);
+    float k = -Vector3DotProduct(plane_normal, w) / dot;
+    u = Vector3Scale(u, k);
+    *out_p = Vector3Add(line_p0, u);
+    return 1;
+}
+
+
+static int get_two_vecs_nearest_point(
+    Vector3 *vec0_out_nearest_point,
+    Vector3 vec0_p0,
+    Vector3 vec0_p1,
+    Vector3 vec1_p0,
+    Vector3 vec1_p1
+) {
+    Vector3 vec0 = Vector3Subtract(vec0_p1, vec0_p0);
+    Vector3 vec1 = Vector3Subtract(vec1_p1, vec1_p0);
+    Vector3 plane_vec = Vector3CrossProduct(vec0, vec1);
+    plane_vec = Vector3Normalize(plane_vec);
+    Vector3 plane_normal = Vector3CrossProduct(vec0, plane_vec);
+    plane_normal = Vector3Normalize(plane_normal);
+
+    int is_isect = isect_line_plane(
+        vec0_out_nearest_point, vec1_p0, vec1_p1, vec0_p0, plane_normal
+    );
+
+    return is_isect;
 }
 
 #endif
