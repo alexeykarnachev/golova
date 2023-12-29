@@ -14,9 +14,6 @@ Matrix GizmoUpdate(Camera3D camera, Vector3 position);
 #include <stdio.h>
 #include <string.h>
 
-#define MIN(a,b) (((a)<(b))?(a):(b))
-#define MAX(a,b) (((a)>(b))?(a):(b))
-
 #define swap(x,y) \
     do { \
         unsigned char swap_temp[sizeof(x) == sizeof(y) ? (signed)sizeof(x) : -1]; \
@@ -24,6 +21,8 @@ Matrix GizmoUpdate(Camera3D camera, Vector3 position);
         memcpy(&y,&x,       sizeof(x)); \
         memcpy(&x,swap_temp,sizeof(x)); \
     } while(0)
+
+#define id_to_red_color(id) (Color){id, 0, 0, 0}
 
 #define MASK_FRAMEBUFFER_WIDTH 500.0
 #define MASK_FRAMEBUFFER_HEIGHT 500.0
@@ -36,17 +35,6 @@ Matrix GizmoUpdate(Camera3D camera, Vector3 position);
 #define X_AXIS (Vector3){1.0, 0.0, 0.0}
 #define Y_AXIS (Vector3){0.0, 1.0, 0.0}
 #define Z_AXIS (Vector3){0.0, 0.0, 1.0}
-
-#define ROT_HANDLE_MASK_X (Color){1, 0, 0, 0}
-#define ROT_HANDLE_MASK_Y (Color){2, 0, 0, 0}
-#define ROT_HANDLE_MASK_Z (Color){3, 0, 0, 0}
-#define AXIS_HANDLE_MASK_X (Color){4, 0, 0, 0}
-#define AXIS_HANDLE_MASK_Y (Color){5, 0, 0, 0}
-#define AXIS_HANDLE_MASK_Z (Color){6, 0, 0, 0}
-#define PLANE_HANDLE_MASK_X (Color){7, 0, 0, 0}
-#define PLANE_HANDLE_MASK_Y (Color){8, 0, 0, 0}
-#define PLANE_HANDLE_MASK_Z (Color){9, 0, 0, 0}
-
 
 static const char *SHADER_COLOR_VERT = "\
 #version 330\n\
@@ -88,16 +76,39 @@ static Vector3 GIZMO_CURRENT_AXIS;
 static unsigned int MASK_FRAMEBUFFER;
 static unsigned int MASK_TEXTURE;
 
+typedef enum HandleId {
+    HANDLE_X,
+
+    ROT_HANDLE_X,
+    AXIS_HANDLE_X,
+    PLANE_HANDLE_X,
+
+    HANDLE_Y,
+
+    ROT_HANDLE_Y,
+    AXIS_HANDLE_Y,
+    PLANE_HANDLE_Y,
+
+    HANDLE_Z,
+
+    ROT_HANDLE_Z,
+    AXIS_HANDLE_Z,
+    PLANE_HANDLE_Z
+} HandleId;
+
 typedef enum GizmoState {
     GIZMO_COLD,
 
+    GIZMO_HOT,
+
     GIZMO_HOT_ROT,
-    GIZMO_ACTIVE_ROT,
-
     GIZMO_HOT_AXIS,
-    GIZMO_ACTIVE_AXIS,
-
     GIZMO_HOT_PLANE,
+
+    GIZMO_ACTIVE,
+
+    GIZMO_ACTIVE_ROT,
+    GIZMO_ACTIVE_AXIS,
     GIZMO_ACTIVE_PLANE,
 } GizmoState;
 
@@ -368,15 +379,15 @@ static unsigned char get_gizmo_mask_pixel(Camera3D camera, Vector3 position) {
     draw_gizmo(
         camera,
         position,
-        ROT_HANDLE_MASK_X,
-        ROT_HANDLE_MASK_Y,
-        ROT_HANDLE_MASK_Z,
-        AXIS_HANDLE_MASK_X,
-        AXIS_HANDLE_MASK_Y,
-        AXIS_HANDLE_MASK_Z,
-        PLANE_HANDLE_MASK_X,
-        PLANE_HANDLE_MASK_Y,
-        PLANE_HANDLE_MASK_Z
+        id_to_red_color(ROT_HANDLE_X),
+        id_to_red_color(ROT_HANDLE_Y),
+        id_to_red_color(ROT_HANDLE_Z),
+        id_to_red_color(AXIS_HANDLE_X),
+        id_to_red_color(AXIS_HANDLE_Y),
+        id_to_red_color(AXIS_HANDLE_Z),
+        id_to_red_color(PLANE_HANDLE_X),
+        id_to_red_color(PLANE_HANDLE_Y),
+        id_to_red_color(PLANE_HANDLE_Z)
     );
 
     rlDisableFramebuffer();
@@ -407,98 +418,90 @@ static unsigned char get_gizmo_mask_pixel(Camera3D camera, Vector3 position) {
     return mask_val;
 }
 
-Matrix update_gizmo(Camera3D camera, Vector3 position, unsigned char mask_val) {
-    Matrix transform = MatrixIdentity();
+bool check_if_mouse_moved() {
     Vector2 mouse_delta = GetMouseDelta();
-    Vector2 curr_mouse_position = GetMousePosition();
-    bool is_mouse_moved = (fabs(mouse_delta.x) + fabs(mouse_delta.y)) > EPSILON;
+    return (fabs(mouse_delta.x) + fabs(mouse_delta.y)) > EPSILON;
+}
 
-    if (!IsMouseButtonDown(0)) {
-        GIZMO_STATE = GIZMO_COLD;
-        GIZMO_CURRENT_AXIS = Vector3Zero();
+Matrix update_gizmo_rot(Camera3D camera, Vector3 position) {
+    if (!check_if_mouse_moved()) return MatrixIdentity();
+    Vector2 rot_center = GetWorldToScreen(position, camera);
+    Vector2 p1 = Vector2Subtract(GetMousePosition(), rot_center);
+    Vector2 p0 = Vector2Subtract(p1, GetMouseDelta());
+    float angle = vector2_get_angle(p1, p0);
+
+    if (
+        Vector3DotProduct(GIZMO_CURRENT_AXIS, position)
+        > Vector3DotProduct(GIZMO_CURRENT_AXIS, camera.position)
+    ) {
+        angle *= -1;
     }
 
-    if (GIZMO_STATE != GIZMO_ACTIVE_ROT && GIZMO_STATE != GIZMO_ACTIVE_AXIS && GIZMO_STATE != GIZMO_ACTIVE_PLANE) {  
-        if (mask_val == ROT_HANDLE_MASK_X.r) {
-            GIZMO_CURRENT_AXIS = X_AXIS;
-            GIZMO_STATE = GIZMO_HOT_ROT;
-        } else if (mask_val == ROT_HANDLE_MASK_Y.r) {
-            GIZMO_CURRENT_AXIS = Y_AXIS;
-            GIZMO_STATE = GIZMO_HOT_ROT;
-        } else if (mask_val == ROT_HANDLE_MASK_Z.r) {
-            GIZMO_CURRENT_AXIS = Z_AXIS;
-            GIZMO_STATE = GIZMO_HOT_ROT;
-        } else if (mask_val == AXIS_HANDLE_MASK_X.r) {
-            GIZMO_CURRENT_AXIS = X_AXIS;
-            GIZMO_STATE = GIZMO_HOT_AXIS;
-        } else if (mask_val == AXIS_HANDLE_MASK_Y.r) {
-            GIZMO_CURRENT_AXIS = Y_AXIS;
-            GIZMO_STATE = GIZMO_HOT_AXIS;
-        } else if (mask_val == AXIS_HANDLE_MASK_Z.r) {
-            GIZMO_CURRENT_AXIS = Z_AXIS;
-            GIZMO_STATE = GIZMO_HOT_AXIS;
-        } else if (mask_val == PLANE_HANDLE_MASK_X.r) {
-            GIZMO_CURRENT_AXIS = X_AXIS;
-            GIZMO_STATE = GIZMO_HOT_PLANE;
-        } else if (mask_val == PLANE_HANDLE_MASK_Y.r) {
-            GIZMO_CURRENT_AXIS = Y_AXIS;
-            GIZMO_STATE = GIZMO_HOT_PLANE;
-        } else if (mask_val == PLANE_HANDLE_MASK_Z.r) {
-            GIZMO_CURRENT_AXIS = Z_AXIS;
-            GIZMO_STATE = GIZMO_HOT_PLANE;
-        }
-
-        if (GIZMO_STATE == GIZMO_HOT_ROT && IsMouseButtonDown(0)) {
-            GIZMO_STATE = GIZMO_ACTIVE_ROT;
-        } else if (GIZMO_STATE == GIZMO_HOT_AXIS && IsMouseButtonDown(0)) {
-            GIZMO_STATE = GIZMO_ACTIVE_AXIS;
-        } else if (GIZMO_STATE == GIZMO_HOT_PLANE && IsMouseButtonDown(0)) {
-            GIZMO_STATE = GIZMO_ACTIVE_PLANE;
-        }
-    } else if (GIZMO_STATE == GIZMO_ACTIVE_ROT && is_mouse_moved) {
-        Vector2 rot_center = GetWorldToScreen(position, camera);
-        Vector2 p1 = Vector2Subtract(curr_mouse_position, rot_center);
-        Vector2 p0 = Vector2Subtract(p1, mouse_delta);
-        float angle = vector2_get_angle(p1, p0);
-
-        if (
-            Vector3DotProduct(GIZMO_CURRENT_AXIS, position)
-            > Vector3DotProduct(GIZMO_CURRENT_AXIS, camera.position)
-        ) {
-            angle *= -1;
-        }
-
-        transform = MatrixMultiply(
-                MatrixMultiply(
-                    MatrixTranslate(-position.x, -position.y, -position.z),
-                    MatrixRotate(GIZMO_CURRENT_AXIS, angle)
-                ),
-                MatrixTranslate(position.x, position.y, position.z)
-        );
-    } else if (GIZMO_STATE == GIZMO_ACTIVE_AXIS && is_mouse_moved) {
-        Vector2 p = Vector2Add(GetWorldToScreen(position, camera), mouse_delta);
-        Ray r = GetMouseRay(p, camera);
-        Vector3 isect_p;
-        int is_isect = get_two_vecs_nearest_point(
-            &isect_p,
-            camera.position,
-            Vector3Add(camera.position, r.direction),
-            position,
-            Vector3Add(position, GIZMO_CURRENT_AXIS)
-        );
-
-        Vector3 offset = Vector3Subtract(isect_p, position);
-        offset = Vector3Multiply(offset, GIZMO_CURRENT_AXIS);
-        transform = MatrixTranslate(offset.x, offset.y, offset.z);
-    } else if (GIZMO_STATE == GIZMO_ACTIVE_PLANE && is_mouse_moved) {
-        Vector2 p = Vector2Add(GetWorldToScreen(position, camera), mouse_delta);
-        Ray r = GetMouseRay(p, camera);
-        RayCollision c = get_ray_plane_collision(r, position, GIZMO_CURRENT_AXIS);
-        Vector3 offset = Vector3Subtract(c.point, position);
-        transform = MatrixTranslate(offset.x, offset.y, offset.z);
-    }
+    Matrix transform = MatrixMultiply(
+            MatrixMultiply(
+                MatrixTranslate(-position.x, -position.y, -position.z),
+                MatrixRotate(GIZMO_CURRENT_AXIS, angle)
+            ),
+            MatrixTranslate(position.x, position.y, position.z)
+    );
 
     return transform;
+}
+
+Matrix update_gizmo_axis(Camera3D camera, Vector3 position) {
+    if (!check_if_mouse_moved()) return MatrixIdentity();
+    Vector2 p = Vector2Add(GetWorldToScreen(position, camera), GetMouseDelta());
+    Ray r = GetMouseRay(p, camera);
+    Vector3 isect_p;
+    int is_isect = get_two_vecs_nearest_point(
+        &isect_p,
+        camera.position,
+        Vector3Add(camera.position, r.direction),
+        position,
+        Vector3Add(position, GIZMO_CURRENT_AXIS)
+    );
+
+    Vector3 offset = Vector3Subtract(isect_p, position);
+    offset = Vector3Multiply(offset, GIZMO_CURRENT_AXIS);
+    Matrix transform = MatrixTranslate(offset.x, offset.y, offset.z);
+
+    return transform;
+}
+
+Matrix update_gizmo_plane(Camera3D camera, Vector3 position) {
+    if (!check_if_mouse_moved()) return MatrixIdentity();
+    Vector2 p = Vector2Add(GetWorldToScreen(position, camera), GetMouseDelta());
+    Ray r = GetMouseRay(p, camera);
+    RayCollision c = get_ray_plane_collision(r, position, GIZMO_CURRENT_AXIS);
+    Vector3 offset = Vector3Subtract(c.point, position);
+    Matrix transform = MatrixTranslate(offset.x, offset.y, offset.z);
+
+    return transform;
+}
+
+Matrix update_gizmo(Camera3D camera, Vector3 position, unsigned char mask_val) {
+    Matrix transform = MatrixIdentity();
+    Vector2 curr_mouse_position = GetMousePosition();
+    bool is_lmb_down = IsMouseButtonDown(0);
+
+    if (!is_lmb_down) GIZMO_STATE = GIZMO_COLD;
+
+    if (GIZMO_STATE < GIZMO_ACTIVE) {  
+        if      (mask_val < HANDLE_Y) GIZMO_CURRENT_AXIS = X_AXIS;
+        else if (mask_val < HANDLE_Z) GIZMO_CURRENT_AXIS = Y_AXIS;
+        else                          GIZMO_CURRENT_AXIS = Z_AXIS;
+
+        if      (mask_val % 4 == 1)   GIZMO_STATE = is_lmb_down ? GIZMO_ACTIVE_ROT : GIZMO_HOT_ROT;
+        else if (mask_val % 4 == 2)   GIZMO_STATE = is_lmb_down ? GIZMO_ACTIVE_AXIS : GIZMO_HOT_AXIS;
+        else if (mask_val % 4 == 3)   GIZMO_STATE = is_lmb_down ? GIZMO_ACTIVE_PLANE : GIZMO_HOT_PLANE;
+    }
+
+    switch (GIZMO_STATE) {
+        case GIZMO_ACTIVE_ROT: return update_gizmo_rot(camera, position);
+        case GIZMO_ACTIVE_AXIS: return update_gizmo_axis(camera, position);
+        case GIZMO_ACTIVE_PLANE: return update_gizmo_plane(camera, position);
+        default: return MatrixIdentity();
+    }
 }
 
 void GizmoLoad() {
