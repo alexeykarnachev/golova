@@ -119,6 +119,12 @@ typedef struct Handle {
     float dist_to_cam;
 } Handle;
 
+typedef struct HandleColors {
+    Color x;
+    Color y;
+    Color z;
+} HandleColors;
+
 typedef struct Handles {
     Handle arr[3];
 } Handles;
@@ -132,6 +138,15 @@ static Handles get_sorted_handles(Handle h0, Handle h1, Handle h2) {
 
     Handles handles = {.arr={h0, h1, h2}};
     return handles;
+}
+
+static HandleColors get_handle_colors(GizmoState hot_state) {
+    bool is_hot = GIZMO_STATE == hot_state || GIZMO_STATE == hot_state + 4;
+    Color x = is_hot && GIZMO_CURRENT_AXIS.x == 1.0 ? WHITE : RED;
+    Color y = is_hot && GIZMO_CURRENT_AXIS.y == 1.0 ? WHITE : GREEN;
+    Color z = is_hot && GIZMO_CURRENT_AXIS.z == 1.0 ? WHITE : BLUE;
+    HandleColors colors = {x, y, z};
+    return colors;
 }
 
 static void draw_axis_handles(
@@ -227,18 +242,14 @@ static float vector2_get_angle(Vector2 v1, Vector2 v2) {
     Vector2 v1_norm = Vector2Normalize(v1);
     Vector2 v2_norm = Vector2Normalize(v2);
     float dot = Vector2DotProduct(v1_norm, v2_norm);
-    if (1.0 - fabs(dot) < EPSILON) {
-        return 0.0;
-    }
+    if (1.0 - fabs(dot) < EPSILON) return 0.0;
+
     float angle = acos(dot);
     float z = v1.x * v2.y - v1.y * v2.x;
-    if (fabs(z) < EPSILON) {
-        return 0.0;
-    } else if (z > 0) {
-        return angle;
-    } else {
-        return -angle;
-    }
+
+    if      (fabs(z) < EPSILON) return 0.0;
+    else if (z > 0)             return angle;
+    else                        return -angle;
 }
 
 static int isect_line_plane(
@@ -248,10 +259,9 @@ static int isect_line_plane(
     Vector3 plane_p,
     Vector3 plane_normal
 ) {
-    static float eps = 0.00001;
     Vector3 u = Vector3Subtract(line_p1, line_p0);
     float dot = Vector3DotProduct(plane_normal, u);
-    if (fabs(dot) <= eps) {
+    if (fabs(dot) <= EPSILON) {
         return 0;
     }
 
@@ -438,11 +448,11 @@ Matrix update_gizmo_rot(Camera3D camera, Vector3 position) {
     }
 
     Matrix transform = MatrixMultiply(
-            MatrixMultiply(
-                MatrixTranslate(-position.x, -position.y, -position.z),
-                MatrixRotate(GIZMO_CURRENT_AXIS, angle)
-            ),
-            MatrixTranslate(position.x, position.y, position.z)
+        MatrixMultiply(
+            MatrixTranslate(-position.x, -position.y, -position.z),
+            MatrixRotate(GIZMO_CURRENT_AXIS, angle)
+        ),
+        MatrixTranslate(position.x, position.y, position.z)
     );
 
     return transform;
@@ -480,8 +490,6 @@ Matrix update_gizmo_plane(Camera3D camera, Vector3 position) {
 }
 
 Matrix update_gizmo(Camera3D camera, Vector3 position, unsigned char mask_val) {
-    Matrix transform = MatrixIdentity();
-    Vector2 curr_mouse_position = GetMousePosition();
     bool is_lmb_down = IsMouseButtonDown(0);
 
     if (!is_lmb_down) GIZMO_STATE = GIZMO_COLD;
@@ -542,45 +550,22 @@ Matrix GizmoUpdate(Camera3D camera, Vector3 position) {
 
     // -------------------------------------------------------------------
     // Draw gizmo
-    Color rot_handle_color_x = RED;
-    Color rot_handle_color_y = GREEN;
-    Color rot_handle_color_z = BLUE;
-    if (GIZMO_STATE == GIZMO_ACTIVE_ROT || GIZMO_STATE == GIZMO_HOT_ROT) {
-        if (GIZMO_CURRENT_AXIS.x == 1.0) rot_handle_color_x = WHITE;
-        if (GIZMO_CURRENT_AXIS.y == 1.0) rot_handle_color_y = WHITE;
-        if (GIZMO_CURRENT_AXIS.z == 1.0) rot_handle_color_z = WHITE;
-    }
-
-    Color axis_handle_color_x = RED;
-    Color axis_handle_color_y = GREEN;
-    Color axis_handle_color_z = BLUE;
-    if (GIZMO_STATE == GIZMO_ACTIVE_AXIS || GIZMO_STATE == GIZMO_HOT_AXIS) {
-        if (GIZMO_CURRENT_AXIS.x == 1.0) axis_handle_color_x = WHITE;
-        if (GIZMO_CURRENT_AXIS.y == 1.0) axis_handle_color_y = WHITE;
-        if (GIZMO_CURRENT_AXIS.z == 1.0) axis_handle_color_z = WHITE;
-    }
-
-    Color plane_handle_color_x = RED;
-    Color plane_handle_color_y = GREEN;
-    Color plane_handle_color_z = BLUE;
-    if (GIZMO_STATE == GIZMO_ACTIVE_PLANE || GIZMO_STATE == GIZMO_HOT_PLANE) {
-        if (GIZMO_CURRENT_AXIS.x == 1.0) plane_handle_color_x = WHITE;
-        if (GIZMO_CURRENT_AXIS.y == 1.0) plane_handle_color_y = WHITE;
-        if (GIZMO_CURRENT_AXIS.z == 1.0) plane_handle_color_z = WHITE;
-    }
+    HandleColors rot_handle_colors = get_handle_colors(GIZMO_HOT_ROT);
+    HandleColors axis_handle_colors = get_handle_colors(GIZMO_HOT_AXIS);
+    HandleColors plane_handle_colors = get_handle_colors(GIZMO_HOT_PLANE);
 
     draw_gizmo(
         camera,
         position,
-        rot_handle_color_x,
-        rot_handle_color_y,
-        rot_handle_color_z,
-        axis_handle_color_x,
-        axis_handle_color_y,
-        axis_handle_color_z,
-        plane_handle_color_x,
-        plane_handle_color_y,
-        plane_handle_color_z
+        rot_handle_colors.x,
+        rot_handle_colors.y,
+        rot_handle_colors.z,
+        axis_handle_colors.x,
+        axis_handle_colors.y,
+        axis_handle_colors.z,
+        plane_handle_colors.x,
+        plane_handle_colors.y,
+        plane_handle_colors.z
     );
 
     if (GIZMO_STATE == GIZMO_ACTIVE_ROT || GIZMO_STATE == GIZMO_ACTIVE_AXIS) {
