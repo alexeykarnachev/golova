@@ -12,9 +12,18 @@ Matrix GizmoUpdate(Camera3D camera, Vector3 position);
 #include <math.h>
 #include <rlgl.h>
 #include <stdio.h>
+#include <string.h>
 
 #define MIN(a,b) (((a)<(b))?(a):(b))
 #define MAX(a,b) (((a)>(b))?(a):(b))
+
+#define swap(x,y) \
+    do { \
+        unsigned char swap_temp[sizeof(x) == sizeof(y) ? (signed)sizeof(x) : -1]; \
+        memcpy(swap_temp,&y,sizeof(x)); \
+        memcpy(&y,&x,       sizeof(x)); \
+        memcpy(&x,swap_temp,sizeof(x)); \
+    } while(0)
 
 #define MASK_FRAMEBUFFER_WIDTH 500.0
 #define MASK_FRAMEBUFFER_HEIGHT 500.0
@@ -27,6 +36,16 @@ Matrix GizmoUpdate(Camera3D camera, Vector3 position);
 #define X_AXIS (Vector3){1.0, 0.0, 0.0}
 #define Y_AXIS (Vector3){0.0, 1.0, 0.0}
 #define Z_AXIS (Vector3){0.0, 0.0, 1.0}
+
+#define ROT_HANDLE_MASK_X (Color){1, 0, 0, 0}
+#define ROT_HANDLE_MASK_Y (Color){2, 0, 0, 0}
+#define ROT_HANDLE_MASK_Z (Color){3, 0, 0, 0}
+#define AXIS_HANDLE_MASK_X (Color){4, 0, 0, 0}
+#define AXIS_HANDLE_MASK_Y (Color){5, 0, 0, 0}
+#define AXIS_HANDLE_MASK_Z (Color){6, 0, 0, 0}
+#define PLANE_HANDLE_MASK_X (Color){7, 0, 0, 0}
+#define PLANE_HANDLE_MASK_Y (Color){8, 0, 0, 0}
+#define PLANE_HANDLE_MASK_Z (Color){9, 0, 0, 0}
 
 
 static const char *SHADER_COLOR_VERT = "\
@@ -82,19 +101,127 @@ typedef enum GizmoState {
     GIZMO_ACTIVE_PLANE,
 } GizmoState;
 
+typedef struct Handle {
+    Vector3 position;
+    Vector3 axis;
+    Color color;
+    float dist_to_cam;
+} Handle;
+
+typedef struct Handles {
+    Handle arr[3];
+} Handles;
+
 static GizmoState GIZMO_STATE;
 
+static Handles get_sorted_handles(Handle h0, Handle h1, Handle h2) {
+    if (h0.dist_to_cam < h1.dist_to_cam) swap(h0, h1);
+    if (h1.dist_to_cam < h2.dist_to_cam) swap(h1, h2);
+    if (h0.dist_to_cam < h1.dist_to_cam) swap(h0, h1);
+
+    Handles handles = {.arr={h0, h1, h2}};
+    return handles;
+}
+
+static void draw_axis_handles(
+    Camera3D camera,
+    Vector3 position,
+    float gizmo_radius,
+    Color color_x,
+    Color color_y,
+    Color color_z
+) {
+    float length = gizmo_radius * 1.2;
+    float tip_length = gizmo_radius * 0.3;
+    float tip_radius = gizmo_radius * 0.1;
+
+    Vector3 px = Vector3Add(position, Vector3Scale(X_AXIS, length));
+    Vector3 py = Vector3Add(position, Vector3Scale(Y_AXIS, length));
+    Vector3 pz = Vector3Add(position, Vector3Scale(Z_AXIS, length));
+
+    Handle hx = {px, X_AXIS, color_x, Vector3DistanceSqr(px, camera.position)};
+    Handle hy = {py, Y_AXIS, color_y, Vector3DistanceSqr(py, camera.position)};
+    Handle hz = {pz, Z_AXIS, color_z, Vector3DistanceSqr(pz, camera.position)};
+
+    Handles handles = get_sorted_handles(hx, hy, hz);
+
+    for (int i = 0; i < 3; ++i) {
+        Handle *h = &handles.arr[i];
+        Vector3 tip_end = Vector3Add(h->position, Vector3Scale(h->axis, tip_length));
+        DrawLine3D(position, h->position, h->color);
+        DrawCylinderEx(h->position, tip_end, tip_radius, 0.0, 16, h->color);
+    }
+}
+
+static void draw_plane_handles(
+    Camera3D camera,
+    Vector3 position,
+    float gizmo_radius,
+    Color color_x,
+    Color color_y,
+    Color color_z
+) {
+    float offset = gizmo_radius * 0.4;
+    float size = gizmo_radius * 0.2;
+
+    Vector3 px = Vector3Add(position, (Vector3){0.0, offset, offset});
+    Vector3 py = Vector3Add(position, (Vector3){offset, 0.0, offset});
+    Vector3 pz = Vector3Add(position, (Vector3){offset, offset, 0.0});
+
+    Handle hx = { px, Z_AXIS, color_x, Vector3DistanceSqr(px, camera.position) };
+    Handle hy = { py, Y_AXIS, color_y, Vector3DistanceSqr(py, camera.position) };
+    Handle hz = { pz, X_AXIS, color_z, Vector3DistanceSqr(pz, camera.position) };
+
+    Handles handles = get_sorted_handles(hx, hy, hz);
+
+    rlDisableBackfaceCulling();
+    for (int i = 0; i < 3; ++i) {
+        Handle *h = &handles.arr[i];
+        rlPushMatrix();
+            rlTranslatef(h->position.x, h->position.y, h->position.z);
+            rlRotatef(90.0, h->axis.x, h->axis.y, h->axis.z);
+            DrawPlane(Vector3Zero(), Vector2Scale(Vector2One(), size), h->color);
+        rlPopMatrix();
+    }
+}
+
+static void draw_rot_handles(
+    Camera3D camera,
+    Vector3 position,
+    float gizmo_radius,
+    Color color_x,
+    Color color_y,
+    Color color_z
+) {
+    BeginShaderMode(SHADER_ROT_HANDLE_COLOR);
+        SetShaderValue(
+            SHADER_ROT_HANDLE_COLOR,
+            SHADER_ROT_HANDLE_CAMERA_POS_LOC,
+            &camera.position,
+            SHADER_UNIFORM_VEC3
+        );
+        SetShaderValue(
+            SHADER_ROT_HANDLE_COLOR,
+            SHADER_ROT_HANDLE_GIZMO_POS_LOC,
+            &position,
+            SHADER_UNIFORM_VEC3
+        );
+        DrawCircle3D(position, gizmo_radius, Y_AXIS, 90.0, color_x);
+        DrawCircle3D(position, gizmo_radius, X_AXIS, 90.0, color_y);
+        DrawCircle3D(position, gizmo_radius, X_AXIS, 0.0, color_z);
+    EndShaderMode();
+}
+
 static float vector2_get_angle(Vector2 v1, Vector2 v2) {
-    static float eps = 0.00001;
     Vector2 v1_norm = Vector2Normalize(v1);
     Vector2 v2_norm = Vector2Normalize(v2);
     float dot = Vector2DotProduct(v1_norm, v2_norm);
-    if (1.0 - fabs(dot) < eps) {
+    if (1.0 - fabs(dot) < EPSILON) {
         return 0.0;
     }
     float angle = acos(dot);
     float z = v1.x * v2.y - v1.y * v2.x;
-    if (fabs(z) < eps) {
+    if (fabs(z) < EPSILON) {
         return 0.0;
     } else if (z > 0) {
         return angle;
@@ -146,7 +273,11 @@ static int get_two_vecs_nearest_point(
     return is_isect;
 }
 
-static RayCollision get_ray_plane_collision(Ray ray, Vector3 plane_point, Vector3 plane_normal) {
+static RayCollision get_ray_plane_collision(
+    Ray ray,
+    Vector3 plane_point,
+    Vector3 plane_normal
+) {
     RayCollision collision = {0};
 
     // Calculate the parameter t
@@ -192,202 +323,43 @@ static void draw_gizmo(
     Color plane_handle_color_z
 ) {
     float radius = GIZMO_SIZE * Vector3Distance(camera.position, position);
-    float axis_handle_length = radius * 1.2;
-    float axis_handle_tip_length = radius * 0.3;
-    float axis_handle_tip_radius = radius * 0.1;
-    float plane_handle_offset = radius * 0.4;
-    Vector2 plane_handle_size = Vector2Scale(Vector2One(), radius * 0.2);
-
-    Vector3 axis_handle_tip_start_x = Vector3Add(position, Vector3Scale(X_AXIS, axis_handle_length));
-    Vector3 axis_handle_tip_start_y = Vector3Add(position, Vector3Scale(Y_AXIS, axis_handle_length));
-    Vector3 axis_handle_tip_start_z = Vector3Add(position, Vector3Scale(Z_AXIS, axis_handle_length));
-
-    Vector3 axis_handle_tip_end_x = Vector3Add(axis_handle_tip_start_x, Vector3Scale(X_AXIS, axis_handle_tip_length));
-    Vector3 axis_handle_tip_end_y = Vector3Add(axis_handle_tip_start_y, Vector3Scale(Y_AXIS, axis_handle_tip_length));
-    Vector3 axis_handle_tip_end_z = Vector3Add(axis_handle_tip_start_z, Vector3Scale(Z_AXIS, axis_handle_tip_length));
 
     BeginMode3D(camera);
         rlSetLineWidth(GIZMO_ROT_CIRCLE_DRAW_THICKNESS);
         rlDisableDepthTest();
 
-        BeginShaderMode(SHADER_ROT_HANDLE_COLOR);
-            SetShaderValue(SHADER_ROT_HANDLE_COLOR, SHADER_ROT_HANDLE_CAMERA_POS_LOC, &camera.position, SHADER_UNIFORM_VEC3);
-            SetShaderValue(SHADER_ROT_HANDLE_COLOR, SHADER_ROT_HANDLE_GIZMO_POS_LOC, &position, SHADER_UNIFORM_VEC3);
-            DrawCircle3D(position, radius, Y_AXIS, 90.0, rot_handle_color_x);
-            DrawCircle3D(position, radius, X_AXIS, 90.0, rot_handle_color_y);
-            DrawCircle3D(position, radius, X_AXIS, 0.0, rot_handle_color_z);
-        EndShaderMode();
- 
-        DrawLine3D(position, axis_handle_tip_start_x, axis_handle_color_x);
-        DrawLine3D(position, axis_handle_tip_start_y, axis_handle_color_y);
-        DrawLine3D(position, axis_handle_tip_start_z, axis_handle_color_z);
-        DrawCylinderEx(axis_handle_tip_start_x, axis_handle_tip_end_x, axis_handle_tip_radius, 0.0, 16, axis_handle_color_x);
-        DrawCylinderEx(axis_handle_tip_start_y, axis_handle_tip_end_y, axis_handle_tip_radius, 0.0, 16, axis_handle_color_y);
-        DrawCylinderEx(axis_handle_tip_start_z, axis_handle_tip_end_z, axis_handle_tip_radius, 0.0, 16, axis_handle_color_z);
+        draw_plane_handles(
+            camera,
+            position,
+            radius,
+            plane_handle_color_x,
+            plane_handle_color_y,
+            plane_handle_color_z
+        );
 
-        rlDisableBackfaceCulling();
+        draw_rot_handles(
+            camera,
+            position,
+            radius,
+            rot_handle_color_x,
+            rot_handle_color_y,
+            rot_handle_color_z
+        );
 
-        Vector3 tz = (Vector3){plane_handle_offset, plane_handle_offset, 0.0};
-        Vector3 tx = (Vector3){0.0, plane_handle_offset, plane_handle_offset};
-        Vector3 ty = (Vector3){plane_handle_offset, 0.0, plane_handle_offset};
-        Vector3 pz = Vector3Add(position, tz);
-        Vector3 px = Vector3Add(position, tx);
-        Vector3 py = Vector3Add(position, ty);
-        float dz = Vector3DistanceSqr(pz, camera.position);
-        float dx = Vector3DistanceSqr(px, camera.position);
-        float dy = Vector3DistanceSqr(py, camera.position);
-
-        if (dz <= MIN(dx, dy)) {
-            if (dx <= dy) {
-                rlPushMatrix();
-                    rlTranslatef(py.x, py.y, py.z);
-                    rlRotatef(90.0, 0.0, 1.0, 0.0);
-                    DrawPlane(Vector3Zero(), plane_handle_size, plane_handle_color_y);
-                rlPopMatrix();
-                rlPushMatrix();
-                    rlTranslatef(px.x, px.y, px.z);
-                    rlRotatef(90.0, 0.0, 0.0, 1.0);
-                    DrawPlane(Vector3Zero(), plane_handle_size, plane_handle_color_x);
-                rlPopMatrix();
-            } else {
-                rlPushMatrix();
-                    rlTranslatef(px.x, px.y, px.z);
-                    rlRotatef(90.0, 0.0, 0.0, 1.0);
-                    DrawPlane(Vector3Zero(), plane_handle_size, plane_handle_color_x);
-                rlPopMatrix();
-                rlPushMatrix();
-                    rlTranslatef(py.x, py.y, py.z);
-                    rlRotatef(90.0, 0.0, 1.0, 0.0);
-                    DrawPlane(Vector3Zero(), plane_handle_size, plane_handle_color_y);
-                rlPopMatrix();
-            }
-
-            rlPushMatrix();
-                rlTranslatef(pz.x, pz.y, pz.z);
-                rlRotatef(90.0, 1.0, 0.0, 0.0);
-                DrawPlane(Vector3Zero(), plane_handle_size, plane_handle_color_z);
-            rlPopMatrix();
-        } else if (dx <= MIN(dz, dy)) {
-            if (dz <= dy) {
-                rlPushMatrix();
-                    rlTranslatef(py.x, py.y, py.z);
-                    rlRotatef(90.0, 0.0, 1.0, 0.0);
-                    DrawPlane(Vector3Zero(), plane_handle_size, plane_handle_color_y);
-                rlPopMatrix();
-                rlPushMatrix();
-                    rlTranslatef(pz.x, pz.y, pz.z);
-                    rlRotatef(90.0, 1.0, 0.0, 0.0);
-                    DrawPlane(Vector3Zero(), plane_handle_size, plane_handle_color_z);
-                rlPopMatrix();
-            } else {
-                rlPushMatrix();
-                    rlTranslatef(pz.x, pz.y, pz.z);
-                    rlRotatef(90.0, 1.0, 0.0, 0.0);
-                    DrawPlane(Vector3Zero(), plane_handle_size, plane_handle_color_z);
-                rlPopMatrix();
-                rlPushMatrix();
-                    rlTranslatef(py.x, py.y, py.z);
-                    rlRotatef(90.0, 0.0, 1.0, 0.0);
-                    DrawPlane(Vector3Zero(), plane_handle_size, plane_handle_color_y);
-                rlPopMatrix();
-            }
-
-            rlPushMatrix();
-                rlTranslatef(px.x, px.y, px.z);
-                rlRotatef(90.0, 0.0, 0.0, 1.0);
-                DrawPlane(Vector3Zero(), plane_handle_size, plane_handle_color_x);
-            rlPopMatrix();
-        } else {
-            if (dz <= dx) {
-                rlPushMatrix();
-                    rlTranslatef(px.x, px.y, px.z);
-                    rlRotatef(90.0, 0.0, 0.0, 1.0);
-                    DrawPlane(Vector3Zero(), plane_handle_size, plane_handle_color_x);
-                rlPopMatrix();
-                rlPushMatrix();
-                    rlTranslatef(pz.x, pz.y, pz.z);
-                    rlRotatef(90.0, 1.0, 0.0, 0.0);
-                    DrawPlane(Vector3Zero(), plane_handle_size, plane_handle_color_z);
-                rlPopMatrix();
-            } else {
-                rlPushMatrix();
-                    rlTranslatef(pz.x, pz.y, pz.z);
-                    rlRotatef(90.0, 1.0, 0.0, 0.0);
-                    DrawPlane(Vector3Zero(), plane_handle_size, plane_handle_color_z);
-                rlPopMatrix();
-                rlPushMatrix();
-                    rlTranslatef(px.x, px.y, px.z);
-                    rlRotatef(90.0, 0.0, 0.0, 1.0);
-                    DrawPlane(Vector3Zero(), plane_handle_size, plane_handle_color_x);
-                rlPopMatrix();
-            }
-
-            rlPushMatrix();
-                rlTranslatef(py.x, py.y, py.z);
-                rlRotatef(90.0, 0.0, 1.0, 0.0);
-                DrawPlane(Vector3Zero(), plane_handle_size, plane_handle_color_y);
-            rlPopMatrix();
-        }
-
+        draw_axis_handles(
+            camera,
+            position,
+            radius,
+            axis_handle_color_x,
+            axis_handle_color_y,
+            axis_handle_color_z
+        );
     EndMode3D();
 }
 
-
-void GizmoLoad() {
-    if (GIZMO_LOADED) {
-        TraceLog(LOG_ERROR, "Gizmo can be loaded only once");
-        exit(1);
-    }
-
-    SHADER_ROT_HANDLE_COLOR = LoadShaderFromMemory(SHADER_COLOR_VERT, SHADER_ROT_HANDLE_COLOR_FRAG);
-    SHADER_ROT_HANDLE_CAMERA_POS_LOC = GetShaderLocation(SHADER_ROT_HANDLE_COLOR, "cameraPosition");
-    SHADER_ROT_HANDLE_GIZMO_POS_LOC = GetShaderLocation(SHADER_ROT_HANDLE_COLOR, "gizmoPosition");
-
-    MASK_FRAMEBUFFER = rlLoadFramebuffer(MASK_FRAMEBUFFER_WIDTH, MASK_FRAMEBUFFER_HEIGHT);
-    if (!MASK_FRAMEBUFFER) {
-        TraceLog(LOG_ERROR, "Failed to create gizmo's mask framebuffer");
-        exit(1);
-    }
-    rlEnableFramebuffer(MASK_FRAMEBUFFER);
-    MASK_TEXTURE = rlLoadTexture(NULL, MASK_FRAMEBUFFER_WIDTH, MASK_FRAMEBUFFER_HEIGHT, RL_PIXELFORMAT_UNCOMPRESSED_R32G32B32A32, 1);
-    rlActiveDrawBuffers(1);
-    rlFramebufferAttach(MASK_FRAMEBUFFER, MASK_TEXTURE, RL_ATTACHMENT_COLOR_CHANNEL0, RL_ATTACHMENT_TEXTURE2D, 0);
-    if (!rlFramebufferComplete(MASK_FRAMEBUFFER)) {
-        TraceLog(LOG_ERROR, "Gizmo's framebuffer is not complete");
-        exit(1);
-    }
-
-    GIZMO_LOADED = true;
-}
-
-Matrix GizmoUpdate(Camera3D camera, Vector3 position) {
-    if (!GIZMO_LOADED) {
-        TraceLog(LOG_ERROR, "Gizmo must be loaded before the update");
-        exit(1);
-    }
-
-    Matrix transform = MatrixIdentity();
-    Vector2 mouse_delta = GetMouseDelta();
-    Vector2 curr_mouse_position = GetMousePosition();
-    Vector2 prev_mouse_position = Vector2Subtract(curr_mouse_position, mouse_delta);
-    bool is_mouse_moved = (fabs(mouse_delta.x) + fabs(mouse_delta.y)) > EPSILON;
-
-    Color color_x = RED;
-    Color color_y = GREEN;
-    Color color_z = BLUE;
-
-    Color rot_handle_mask_x = (Color){1, 0, 0, 0};
-    Color rot_handle_mask_y = (Color){2, 0, 0, 0};
-    Color rot_handle_mask_z = (Color){3, 0, 0, 0};
-    Color axis_handle_mask_x = (Color){4, 0, 0, 0};
-    Color axis_handle_mask_y = (Color){5, 0, 0, 0};
-    Color axis_handle_mask_z = (Color){6, 0, 0, 0};
-    Color plane_handle_mask_x = (Color){7, 0, 0, 0};
-    Color plane_handle_mask_y = (Color){8, 0, 0, 0};
-    Color plane_handle_mask_z = (Color){9, 0, 0, 0};
-
+static unsigned char get_gizmo_mask_pixel(Camera3D camera, Vector3 position) {
     // -------------------------------------------------------------------
-    // Draw gizmo to the mask buffer (for pixel picking)
+    // Draw gizmo into a separate framebuffer for the mouse pixel-picking
     rlEnableFramebuffer(MASK_FRAMEBUFFER);
     rlViewport(0, 0, MASK_FRAMEBUFFER_WIDTH, MASK_FRAMEBUFFER_HEIGHT);
     rlClearScreenBuffers();
@@ -396,62 +368,82 @@ Matrix GizmoUpdate(Camera3D camera, Vector3 position) {
     draw_gizmo(
         camera,
         position,
-        rot_handle_mask_x,
-        rot_handle_mask_y,
-        rot_handle_mask_z,
-        axis_handle_mask_x,
-        axis_handle_mask_y,
-        axis_handle_mask_z,
-        plane_handle_mask_x,
-        plane_handle_mask_y,
-        plane_handle_mask_z
+        ROT_HANDLE_MASK_X,
+        ROT_HANDLE_MASK_Y,
+        ROT_HANDLE_MASK_Z,
+        AXIS_HANDLE_MASK_X,
+        AXIS_HANDLE_MASK_Y,
+        AXIS_HANDLE_MASK_Z,
+        PLANE_HANDLE_MASK_X,
+        PLANE_HANDLE_MASK_Y,
+        PLANE_HANDLE_MASK_Z
     );
-
-    unsigned char *pixels = (unsigned char*)rlReadTexturePixels(MASK_TEXTURE, MASK_FRAMEBUFFER_WIDTH, MASK_FRAMEBUFFER_HEIGHT, RL_PIXELFORMAT_UNCOMPRESSED_R8G8B8A8);
-    int x = (int)(MASK_FRAMEBUFFER_WIDTH * Clamp(curr_mouse_position.x / (float)GetScreenWidth(), 0.0, 1.0));
-    int y = (int)(MASK_FRAMEBUFFER_HEIGHT * Clamp(1.0 - (curr_mouse_position.y / (float)GetScreenHeight()), 0.0, 1.0));
-    int idx = 4 * (y * MASK_FRAMEBUFFER_WIDTH + x);
-    unsigned char mask_val = pixels[idx];
-
-    free(pixels);
 
     rlDisableFramebuffer();
     rlEnableColorBlend();
     rlViewport(0, 0, GetScreenWidth(), GetScreenHeight());
 
     // -------------------------------------------------------------------
-    // Update gizmo CPU logic
+    // Pick the pixel under the mouse cursor
+    Vector2 mouse_position = GetMousePosition();
+    unsigned char *pixels = (unsigned char*)rlReadTexturePixels(
+        MASK_TEXTURE,
+        MASK_FRAMEBUFFER_WIDTH,
+        MASK_FRAMEBUFFER_HEIGHT,
+        RL_PIXELFORMAT_UNCOMPRESSED_R8G8B8A8
+    );
+    int x = (int)(
+        MASK_FRAMEBUFFER_WIDTH
+        * Clamp(mouse_position.x / (float)GetScreenWidth(), 0.0, 1.0)
+    );
+    int y = (int)(
+        MASK_FRAMEBUFFER_HEIGHT
+        * Clamp(1.0 - (mouse_position.y / (float)GetScreenHeight()), 0.0, 1.0)
+    );
+    int idx = 4 * (y * MASK_FRAMEBUFFER_WIDTH + x);
+    unsigned char mask_val = pixels[idx];
+    free(pixels);
+
+    return mask_val;
+}
+
+Matrix update_gizmo(Camera3D camera, Vector3 position, unsigned char mask_val) {
+    Matrix transform = MatrixIdentity();
+    Vector2 mouse_delta = GetMouseDelta();
+    Vector2 curr_mouse_position = GetMousePosition();
+    bool is_mouse_moved = (fabs(mouse_delta.x) + fabs(mouse_delta.y)) > EPSILON;
+
     if (!IsMouseButtonDown(0)) {
         GIZMO_STATE = GIZMO_COLD;
         GIZMO_CURRENT_AXIS = Vector3Zero();
     }
 
     if (GIZMO_STATE != GIZMO_ACTIVE_ROT && GIZMO_STATE != GIZMO_ACTIVE_AXIS && GIZMO_STATE != GIZMO_ACTIVE_PLANE) {  
-        if (mask_val == rot_handle_mask_x.r) {
+        if (mask_val == ROT_HANDLE_MASK_X.r) {
             GIZMO_CURRENT_AXIS = X_AXIS;
             GIZMO_STATE = GIZMO_HOT_ROT;
-        } else if (mask_val == rot_handle_mask_y.r) {
+        } else if (mask_val == ROT_HANDLE_MASK_Y.r) {
             GIZMO_CURRENT_AXIS = Y_AXIS;
             GIZMO_STATE = GIZMO_HOT_ROT;
-        } else if (mask_val == rot_handle_mask_z.r) {
+        } else if (mask_val == ROT_HANDLE_MASK_Z.r) {
             GIZMO_CURRENT_AXIS = Z_AXIS;
             GIZMO_STATE = GIZMO_HOT_ROT;
-        } else if (mask_val == axis_handle_mask_x.r) {
+        } else if (mask_val == AXIS_HANDLE_MASK_X.r) {
             GIZMO_CURRENT_AXIS = X_AXIS;
             GIZMO_STATE = GIZMO_HOT_AXIS;
-        } else if (mask_val == axis_handle_mask_y.r) {
+        } else if (mask_val == AXIS_HANDLE_MASK_Y.r) {
             GIZMO_CURRENT_AXIS = Y_AXIS;
             GIZMO_STATE = GIZMO_HOT_AXIS;
-        } else if (mask_val == axis_handle_mask_z.r) {
+        } else if (mask_val == AXIS_HANDLE_MASK_Z.r) {
             GIZMO_CURRENT_AXIS = Z_AXIS;
             GIZMO_STATE = GIZMO_HOT_AXIS;
-        } else if (mask_val == plane_handle_mask_x.r) {
+        } else if (mask_val == PLANE_HANDLE_MASK_X.r) {
             GIZMO_CURRENT_AXIS = X_AXIS;
             GIZMO_STATE = GIZMO_HOT_PLANE;
-        } else if (mask_val == plane_handle_mask_y.r) {
+        } else if (mask_val == PLANE_HANDLE_MASK_Y.r) {
             GIZMO_CURRENT_AXIS = Y_AXIS;
             GIZMO_STATE = GIZMO_HOT_PLANE;
-        } else if (mask_val == plane_handle_mask_z.r) {
+        } else if (mask_val == PLANE_HANDLE_MASK_Z.r) {
             GIZMO_CURRENT_AXIS = Z_AXIS;
             GIZMO_STATE = GIZMO_HOT_PLANE;
         }
@@ -506,29 +498,68 @@ Matrix GizmoUpdate(Camera3D camera, Vector3 position) {
         transform = MatrixTranslate(offset.x, offset.y, offset.z);
     }
 
+    return transform;
+}
+
+void GizmoLoad() {
+    if (GIZMO_LOADED) {
+        TraceLog(LOG_ERROR, "Gizmo can be loaded only once");
+        exit(1);
+    }
+
+    SHADER_ROT_HANDLE_COLOR = LoadShaderFromMemory(SHADER_COLOR_VERT, SHADER_ROT_HANDLE_COLOR_FRAG);
+    SHADER_ROT_HANDLE_CAMERA_POS_LOC = GetShaderLocation(SHADER_ROT_HANDLE_COLOR, "cameraPosition");
+    SHADER_ROT_HANDLE_GIZMO_POS_LOC = GetShaderLocation(SHADER_ROT_HANDLE_COLOR, "gizmoPosition");
+
+    MASK_FRAMEBUFFER = rlLoadFramebuffer(MASK_FRAMEBUFFER_WIDTH, MASK_FRAMEBUFFER_HEIGHT);
+    if (!MASK_FRAMEBUFFER) {
+        TraceLog(LOG_ERROR, "Failed to create gizmo's mask framebuffer");
+        exit(1);
+    }
+    rlEnableFramebuffer(MASK_FRAMEBUFFER);
+    MASK_TEXTURE = rlLoadTexture(NULL, MASK_FRAMEBUFFER_WIDTH, MASK_FRAMEBUFFER_HEIGHT, RL_PIXELFORMAT_UNCOMPRESSED_R32G32B32A32, 1);
+    rlActiveDrawBuffers(1);
+    rlFramebufferAttach(MASK_FRAMEBUFFER, MASK_TEXTURE, RL_ATTACHMENT_COLOR_CHANNEL0, RL_ATTACHMENT_TEXTURE2D, 0);
+    if (!rlFramebufferComplete(MASK_FRAMEBUFFER)) {
+        TraceLog(LOG_ERROR, "Gizmo's framebuffer is not complete");
+        exit(1);
+    }
+
+    GIZMO_LOADED = true;
+}
+
+Matrix GizmoUpdate(Camera3D camera, Vector3 position) {
+    if (!GIZMO_LOADED) {
+        TraceLog(LOG_ERROR, "Gizmo must be loaded before the update");
+        exit(1);
+    }
+
+    unsigned char mask_val = get_gizmo_mask_pixel(camera, position);
+    Matrix transform = update_gizmo(camera, position, mask_val);
+
     // -------------------------------------------------------------------
     // Draw gizmo
-    Color rot_handle_color_x = color_x;
-    Color rot_handle_color_y = color_y;
-    Color rot_handle_color_z = color_z;
+    Color rot_handle_color_x = RED;
+    Color rot_handle_color_y = GREEN;
+    Color rot_handle_color_z = BLUE;
     if (GIZMO_STATE == GIZMO_ACTIVE_ROT || GIZMO_STATE == GIZMO_HOT_ROT) {
         if (GIZMO_CURRENT_AXIS.x == 1.0) rot_handle_color_x = WHITE;
         if (GIZMO_CURRENT_AXIS.y == 1.0) rot_handle_color_y = WHITE;
         if (GIZMO_CURRENT_AXIS.z == 1.0) rot_handle_color_z = WHITE;
     }
 
-    Color axis_handle_color_x = color_x;
-    Color axis_handle_color_y = color_y;
-    Color axis_handle_color_z = color_z;
+    Color axis_handle_color_x = RED;
+    Color axis_handle_color_y = GREEN;
+    Color axis_handle_color_z = BLUE;
     if (GIZMO_STATE == GIZMO_ACTIVE_AXIS || GIZMO_STATE == GIZMO_HOT_AXIS) {
         if (GIZMO_CURRENT_AXIS.x == 1.0) axis_handle_color_x = WHITE;
         if (GIZMO_CURRENT_AXIS.y == 1.0) axis_handle_color_y = WHITE;
         if (GIZMO_CURRENT_AXIS.z == 1.0) axis_handle_color_z = WHITE;
     }
 
-    Color plane_handle_color_x = color_x;
-    Color plane_handle_color_y = color_y;
-    Color plane_handle_color_z = color_z;
+    Color plane_handle_color_x = RED;
+    Color plane_handle_color_y = GREEN;
+    Color plane_handle_color_z = BLUE;
     if (GIZMO_STATE == GIZMO_ACTIVE_PLANE || GIZMO_STATE == GIZMO_HOT_PLANE) {
         if (GIZMO_CURRENT_AXIS.x == 1.0) plane_handle_color_x = WHITE;
         if (GIZMO_CURRENT_AXIS.y == 1.0) plane_handle_color_y = WHITE;
@@ -558,7 +589,7 @@ Matrix GizmoUpdate(Camera3D camera, Vector3 position) {
         EndMode3D();
 
         if (GIZMO_STATE == GIZMO_ACTIVE_ROT) {
-            DrawLineV(GetWorldToScreen(position, camera), curr_mouse_position, WHITE);
+            DrawLineV(GetWorldToScreen(position, camera), GetMousePosition(), WHITE);
         }
     }
 
