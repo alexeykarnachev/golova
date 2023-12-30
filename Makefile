@@ -23,10 +23,17 @@ RAYGUI_PATH=$(DEPS_PATH)/$(RAYGUI_NAME)
 RAYGUI_ARCHIVE_PATH=$(DEPS_PATH)/$(RAYGUI_NAME).tar.gz
 RAYGUI_SRC_PATH=$(RAYGUI_PATH)/src
 
+RAYGIZMO_VERSION=1.0
+RAYGIZMO_URL=https://github.com/alexeykarnachev/raygizmo/archive/refs/tags/$(RAYGIZMO_VERSION).tar.gz
+RAYGIZMO_NAME=raygizmo-${RAYGIZMO_VERSION}
+RAYGIZMO_PATH=$(DEPS_PATH)/$(RAYGIZMO_NAME)
+RAYGIZMO_ARCHIVE_PATH=$(DEPS_PATH)/$(RAYGIZMO_NAME).tar.gz
+RAYGIZMO_SRC_PATH=$(RAYGIZMO_PATH)/src
+
 # ------------------------------------------------------------------------
 # Golova
 LIB_PATHS = -L$(RAYLIB_BUILD_PATH)
-INC_PATHS = -I$(RAYLIB_SRC_PATH) -I$(RAYGUI_SRC_PATH)
+INC_PATHS = -I$(RAYLIB_SRC_PATH) -I$(RAYGUI_SRC_PATH) -I$(RAYGIZMO_SRC_PATH)
 CFLAGS = -Wall -std=c99 -Wno-missing-braces -Wunused-result
 LIBS = -lraylib -lGL -lm -lpthread -ldl -lrt -lX11
 
@@ -66,4 +73,8 @@ raylib:
 	if [ ! -d $(RAYGUI_PATH) ]; then \
 		wget $(RAYGUI_URL) -O $(RAYGUI_ARCHIVE_PATH); \
 		tar zxvf $(RAYGUI_ARCHIVE_PATH) -C $(DEPS_PATH); \
+	fi
+	if [ ! -d $(RAYGIZMO_PATH) ]; then \
+		wget $(RAYGIZMO_URL) -O $(RAYGIZMO_ARCHIVE_PATH); \
+		tar zxvf $(RAYGIZMO_ARCHIVE_PATH) -C $(DEPS_PATH); \
 	fi
