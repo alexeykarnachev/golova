@@ -1,7 +1,5 @@
 #include "scene.h"
 
-#include "raylib.h"
-#include "raymath.h"
 #include "resources.h"
 
 Scene SCENE;
@@ -14,5 +12,10 @@ void load_scene(void) {
     golova.model.materials[0].maps[0].texture = GOLOVA_TEXTURE;
     golova.model.materials[0].shader = SPRITE_SHADER;
 
+    Ground ground;
+    ground.model = LoadModelFromMesh(GenMeshPlane(10.0, 10.0, 2, 2));
+    ground.model.materials[0].shader = GROUND_SHADER;
+
     SCENE.golova = golova;
+    SCENE.ground = ground;
 }

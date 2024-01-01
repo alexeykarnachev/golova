@@ -1,6 +1,6 @@
-#include "raylib.h"
+#include "camera.h"
+
 #include "raymath.h"
-#include "rcamera.h"
 
 #define EDITOR_CAMERA_ROT_SPEED 0.003f
 #define EDITOR_CAMERA_MOVE_SPEED 0.01f
