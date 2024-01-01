@@ -2,14 +2,14 @@
 
 CC=gcc
 CFLAGS=-Wall -std=c99 -Wno-missing-braces -Wunused-result -I./include
-LDFLAGS=-L./lib -lraylib -lm -lpthread -ldl
+LDFLAGS=-L./lib -lraylib -lcimgui -lm -lpthread -ldl -lGL -lstdc++
 
-CURR_DIR=$(shell pwd)
-BIN_DIR=$(CURR_DIR)/bin
-SRC_DIR=$(CURR_DIR)/src
-DEPS_DIR=$(CURR_DIR)/deps
-INCLUDE_DIR=$(CURR_DIR)/include
-LIB_DIR=$(CURR_DIR)/lib
+THIS_DIR=$(shell pwd)
+BIN_DIR=$(THIS_DIR)/bin
+SRC_DIR=$(THIS_DIR)/src
+DEPS_DIR=$(THIS_DIR)/deps
+INCLUDE_DIR=$(THIS_DIR)/include
+LIB_DIR=$(THIS_DIR)/lib
 
 PROJ_SRCS = $(shell find $(SRC_DIR) -type f -name '*.c')
 PROJ_OBJS = $(patsubst %.c,%.o,$(PROJ_SRCS))
@@ -36,6 +36,11 @@ RAYGIZMO_ARCHIVE_PATH=$(DEPS_DIR)/$(RAYGIZMO_NAME).tar.gz
 RAYGIZMO_SRC_DIR=$(RAYGIZMO_DIR)/src
 
 # ------------------------------------------------------------------------
+# Cimgui
+CIMGUI_NAME=cimgui
+CIMGUI_DIR=$(DEPS_DIR)/$(CIMGUI_NAME)
+
+# ------------------------------------------------------------------------
 # Project
 all: \
 	$(BIN_NAMES)
@@ -43,7 +48,7 @@ all: \
 	rm -f $(BIN_DIR)/*.o;
 
 $(BIN_NAMES): %: $(BIN_DIR)/%.o $(PROJ_OBJS); \
-	$(CC) -o $(BIN_DIR)/$@ $^ $(LDFLAGS)
+	$(CC) -o $(BIN_DIR)/$@ $^ -Wl,-rpath=$(THIS_DIR)/lib $(LDFLAGS)
 
 %.o: %.c; \
 	$(CC) $(CFLAGS) -c -o $@ $<
@@ -65,6 +70,11 @@ download_raygizmo:
 		tar zxvf $(RAYGIZMO_ARCHIVE_PATH) -C $(DEPS_DIR); \
 	fi
 
+download_cimgui:
+	if [ ! -d $(CIMGUI_DIR) ]; then \
+		git clone --recursive https://github.com/cimgui/cimgui.git $(CIMGUI_DIR); \
+	fi
+
 install_raylib:
 	cd $(RAYLIB_SRC_DIR) \
 	&& make PLATFORM=$(RAYLIB_PLATFORM) \
@@ -76,11 +86,21 @@ install_raylib:
 install_raygizmo:
 	cp $(RAYGIZMO_SRC_DIR)/raygizmo.h $(INCLUDE_DIR);
 
-install_deps: \
+install_cimgui:
+	cd $(CIMGUI_DIR)/backend_test/example_glfw_opengl3 \
+	&& cmake .\
+	&& make \
+	&& cp libcimgui.so $(LIB_DIR) \
+	&& cp $(CIMGUI_DIR)/cimgui.h $(INCLUDE_DIR) \
+	&& cp $(CIMGUI_DIR)/generator/output/cimgui_impl.h $(INCLUDE_DIR); \
+
+deps: \
 	create_dirs \
 	download_raylib \
 	download_raygizmo \
+	download_cimgui \
 	install_raylib \
-	install_raygizmo
+	install_raygizmo \
+	install_cimgui
 	rm -f $(DEPS_DIR)/*.tar.gz;
 
