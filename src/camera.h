@@ -1,5 +1,6 @@
+#pragma once
+
 #include "raylib.h"
 #include "rcamera.h"
 
-
-void updateEditorCamera(Camera3D* camera);
+void update_editor_camera(Camera3D* camera);
