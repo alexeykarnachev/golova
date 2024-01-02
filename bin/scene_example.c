@@ -25,6 +25,8 @@ static void draw_scene(void) {
 }
 
 static void draw_editor(void) {
+    rlEnableBackfaceCulling();
+
     BeginTextureMode(EDITOR_SCREEN);
     {
         ClearBackground(DARKGRAY);
@@ -32,7 +34,7 @@ static void draw_editor(void) {
         {
             draw_scene();
             rlSetLineWidth(1.0);
-            DrawGrid(100.0, 1.0);
+            DrawGrid(100.0, 5.0);
 
             rlSetLineWidth(2.0);
             DrawLine3D(
@@ -51,6 +53,20 @@ static void draw_editor(void) {
         }
         EndMode3D();
 
+        // Draw game camera sphere and ray of view
+        BeginMode3D(EDITOR_CAMERA);
+        {
+            Vector3 v = Vector3Subtract(
+                SCENE.camera.c3d.target, SCENE.camera.c3d.position
+            );
+            v = Vector3Scale(Vector3Normalize(v), 2.0f);
+            Vector3 start = SCENE.camera.c3d.position;
+            Vector3 end = Vector3Add(start, v);
+            rlSetLineWidth(5.0);
+            DrawLine3D(start, end, PINK);
+        }
+        EndMode3D();
+
         if (PICKED_MODEL_ID != -1) {
             rgizmo_draw(GIZMO, EDITOR_CAMERA, PICKED_MODEL_POSITION);
         }
@@ -59,10 +75,12 @@ static void draw_editor(void) {
 }
 
 static void draw_game(void) {
+    rlEnableBackfaceCulling();
+
     BeginTextureMode(GAME_SCREEN);
     {
         ClearBackground(BLACK);
-        BeginMode3D(SCENE.camera);
+        BeginMode3D(SCENE.camera.c3d);
         {
             draw_scene();
             //
@@ -93,18 +111,10 @@ static void update_editor(void) {
     update_editor_camera(&EDITOR_CAMERA);
 
     int picked_model_id = PICKED_MODEL_ID;
-    if (IsMouseButtonReleased(0)) {
-        BeginDrawing();
-        {
-            BeginMode3D(EDITOR_CAMERA);
-            {
-                picked_model_id = pick_model(
-                    SCENE.models, SCENE.n_models, GetMousePosition()
-                );
-            }
-            EndMode3D();
-        }
-        EndDrawing();
+    if (IsMouseButtonReleased(0) && GIZMO.state == RGIZMO_STATE_COLD) {
+        picked_model_id = pick_model_3d(
+            EDITOR_CAMERA, SCENE.models, SCENE.n_models, GetMousePosition()
+        );
     }
 
     if (picked_model_id == -1 && GIZMO.state == RGIZMO_STATE_COLD) {
@@ -123,6 +133,23 @@ static void update_editor(void) {
         *transform = MatrixMultiply(
             *transform, rgizmo_get_tranform(GIZMO, PICKED_MODEL_POSITION)
         );
+
+        if (PICKED_MODEL_ID == SCENE.camera.model_id) {
+            if (GIZMO.update.axis.x == 1.0) {
+                CameraPitch(
+                    &SCENE.camera.c3d, GIZMO.update.angle, false, false, false
+                );
+            }
+            if (GIZMO.update.axis.y == 1.0) {
+                CameraYaw(&SCENE.camera.c3d, GIZMO.update.angle, false);
+            }
+            SCENE.camera.c3d.position = Vector3Add(
+                SCENE.camera.c3d.position, GIZMO.update.translation
+            );
+            SCENE.camera.c3d.target = Vector3Add(
+                SCENE.camera.c3d.target, GIZMO.update.translation
+            );
+        }
     }
 }
 

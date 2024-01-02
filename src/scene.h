@@ -6,12 +6,17 @@
 #define SCENE_MAX_N_MODELS 256
 
 typedef struct Golova {
-    size_t model_idx;
+    size_t model_id;
 } Golova;
 
 typedef struct Ground {
-    size_t model_idx;
+    size_t model_id;
 } Ground;
+
+typedef struct GameCamera {
+    Camera3D c3d;
+    size_t model_id;
+} GameCamera;
 
 typedef struct Scene {
     Model models[SCENE_MAX_N_MODELS];
@@ -19,7 +24,7 @@ typedef struct Scene {
 
     Golova golova;
     Ground ground;
-    Camera3D camera;
+    GameCamera camera;
 } Scene;
 
 extern Scene SCENE;

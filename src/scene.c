@@ -1,6 +1,7 @@
 #include "scene.h"
 
 #include "raylib.h"
+#include "raymath.h"
 #include "resources.h"
 #include <stdlib.h>
 
@@ -12,9 +13,9 @@ static size_t add_model(Model model) {
         exit(1);
     }
 
-    size_t model_idx = SCENE.n_models++;
-    SCENE.models[model_idx] = model;
-    return model_idx;
+    size_t model_id = SCENE.n_models++;
+    SCENE.models[model_id] = model;
+    return model_id;
 }
 
 void load_scene(void) {
@@ -23,15 +24,21 @@ void load_scene(void) {
     Model golova_model = LoadModelFromMesh(GenMeshPlane(aspect, 1.0, 2, 2));
     golova_model.materials[0].maps[0].texture = GOLOVA_TEXTURE;
     golova_model.materials[0].shader = SPRITE_SHADER;
-    SCENE.golova.model_idx = add_model(golova_model);
+    SCENE.golova.model_id = add_model(golova_model);
 
     Model ground_model = LoadModelFromMesh(GenMeshPlane(10.0, 10.0, 2, 2));
     ground_model.materials[0].shader = GROUND_SHADER;
-    SCENE.ground.model_idx = add_model(ground_model);
+    SCENE.ground.model_id = add_model(ground_model);
 
-    SCENE.camera.fovy = 60.0f;
-    SCENE.camera.target = (Vector3){0.0f, 0.0f, 0.0f};
-    SCENE.camera.position = (Vector3){0.0f, 5.0f, 5.0f};
-    SCENE.camera.up = (Vector3){0.0f, 1.0f, 0.0f};
-    SCENE.camera.projection = CAMERA_PERSPECTIVE;
+    Vector3 camera_position = (Vector3){0.0f, 2.5f, 2.5f};
+    SCENE.camera.c3d.fovy = 60.0f;
+    SCENE.camera.c3d.target = (Vector3){0.0f, 0.0f, -1.0f};
+    SCENE.camera.c3d.position = camera_position;
+    SCENE.camera.c3d.up = (Vector3){0.0f, 1.0f, 0.0f};
+    SCENE.camera.c3d.projection = CAMERA_PERSPECTIVE;
+    Model camera_model = LoadModelFromMesh(GenMeshSphere(0.15, 16, 16));
+    camera_model.transform = MatrixTranslate(
+        camera_position.x, camera_position.y, camera_position.z
+    );
+    SCENE.camera.model_id = add_model(camera_model);
 }

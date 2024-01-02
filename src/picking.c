@@ -25,7 +25,7 @@ void main() { \
 } \
 ";
 
-int pick_model(Model* models, size_t n_models, Vector2 mouse_position) {
+static int pick_model(Model* models, size_t n_models, Vector2 mouse_position) {
     if (!IS_PICKING_LOADED) {
         TraceLog(LOG_ERROR, "GOLOVA: Picking is not loaded");
         exit(1);
@@ -85,6 +85,21 @@ int pick_model(Model* models, size_t n_models, Vector2 mouse_position) {
     return id;
 }
 
+int pick_model_3d(
+    Camera3D camera, Model* models, size_t n_models, Vector2 mouse_position
+) {
+    int id = -1;
+    BeginDrawing();
+    {
+        BeginMode3D(camera);
+        { id = pick_model(models, n_models, mouse_position); }
+        EndMode3D();
+    }
+    EndDrawing();
+
+    return id;
+}
+
 void load_picking(void) {
     if (IS_PICKING_LOADED) {
         TraceLog(LOG_WARNING, "GOLOVA: Picking is already loaded");
@@ -115,9 +130,7 @@ void load_picking(void) {
     rlActiveDrawBuffers(1);
 
     PICKING_DEPTH_TEXTURE = rlLoadTextureDepth(
-        PICKING_FBO_WIDTH,
-        PICKING_FBO_HEIGHT,
-        true
+        PICKING_FBO_WIDTH, PICKING_FBO_HEIGHT, true
     );
     rlFramebufferAttach(
         PICKING_FBO,
