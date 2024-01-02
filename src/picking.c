@@ -12,6 +12,7 @@
 static bool IS_PICKING_LOADED = false;
 static unsigned int PICKING_FBO;
 static unsigned int PICKING_TEXTURE;
+static unsigned int PICKING_DEPTH_TEXTURE;
 static Material PICKING_MATERIAL;
 
 static int PICKING_SHADER_ID_LOC;
@@ -26,7 +27,7 @@ void main() { \
 
 int pick_model(Model* models, size_t n_models, Vector2 mouse_position) {
     if (!IS_PICKING_LOADED) {
-        TraceLog(LOG_ERROR, "Picking is not loaded");
+        TraceLog(LOG_ERROR, "GOLOVA: Picking is not loaded");
         exit(1);
     }
 
@@ -86,13 +87,13 @@ int pick_model(Model* models, size_t n_models, Vector2 mouse_position) {
 
 void load_picking(void) {
     if (IS_PICKING_LOADED) {
-        TraceLog(LOG_WARNING, "Picking is already loaded");
+        TraceLog(LOG_WARNING, "GOLOVA: Picking is already loaded");
         return;
     };
 
     PICKING_FBO = rlLoadFramebuffer(PICKING_FBO_WIDTH, PICKING_FBO_HEIGHT);
     if (!PICKING_FBO) {
-        TraceLog(LOG_ERROR, "Failed to create picking fbo");
+        TraceLog(LOG_ERROR, "GOLOVA: Failed to create picking fbo");
         exit(1);
     }
     rlEnableFramebuffer(PICKING_FBO);
@@ -104,7 +105,6 @@ void load_picking(void) {
         RL_PIXELFORMAT_UNCOMPRESSED_R8G8B8A8,
         1
     );
-    rlActiveDrawBuffers(1);
     rlFramebufferAttach(
         PICKING_FBO,
         PICKING_TEXTURE,
@@ -112,15 +112,29 @@ void load_picking(void) {
         RL_ATTACHMENT_TEXTURE2D,
         0
     );
+    rlActiveDrawBuffers(1);
+
+    PICKING_DEPTH_TEXTURE = rlLoadTextureDepth(
+        PICKING_FBO_WIDTH,
+        PICKING_FBO_HEIGHT,
+        true
+    );
+    rlFramebufferAttach(
+        PICKING_FBO,
+        PICKING_DEPTH_TEXTURE,
+        RL_ATTACHMENT_DEPTH,
+        RL_ATTACHMENT_RENDERBUFFER,
+        0
+    );
 
     if (!rlFramebufferComplete(PICKING_FBO)) {
-        TraceLog(LOG_ERROR, "Picking fbo is not complete");
+        TraceLog(LOG_ERROR, "GOLOVA: Picking fbo is not complete");
         exit(1);
     }
 
     Shader shader = LoadShaderFromMemory(0, PICKING_SHADER_FRAG);
     if (!IsShaderReady(shader)) {
-        TraceLog(LOG_ERROR, "Failed to load picking shader");
+        TraceLog(LOG_ERROR, "GOLOVA: Failed to load picking shader");
         exit(1);
     }
     PICKING_SHADER_ID_LOC = GetShaderLocation(shader, "u_id");
@@ -133,7 +147,7 @@ void load_picking(void) {
 
 void unload_picking(void) {
     if (!IS_PICKING_LOADED) {
-        TraceLog(LOG_WARNING, "Picking is not loaded");
+        TraceLog(LOG_WARNING, "GOLOVA: Picking is not loaded");
         return;
     };
 
