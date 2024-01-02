@@ -10,21 +10,16 @@
 #include "raymath.h"
 #include "rlgl.h"
 
-#define MAX_N_MODELS 256
-
 Camera3D EDITOR_CAMERA;
-Camera3D GAME_CAMERA;
 RenderTexture EDITOR_SCREEN;
 RenderTexture GAME_SCREEN;
-Model* MODELS[MAX_N_MODELS];
-size_t N_MODELS = 0;
 
 static int PICKED_MODEL_ID = -1;
 static Vector3 PICKED_MODEL_POSITION;
 
 static void draw_scene(void) {
-    for (size_t i = 0; i < N_MODELS; ++i) {
-        DrawModel(*MODELS[i], (Vector3){0.0, 0.0, 0.0}, 1.0, WHITE);
+    for (size_t i = 0; i < SCENE.n_models; ++i) {
+        DrawModel(SCENE.models[i], (Vector3){0.0, 0.0, 0.0}, 1.0, WHITE);
     }
 }
 
@@ -66,7 +61,7 @@ static void draw_game(void) {
     BeginTextureMode(GAME_SCREEN);
     {
         ClearBackground(BLACK);
-        BeginMode3D(GAME_CAMERA);
+        BeginMode3D(SCENE.camera);
         {
             draw_scene();
             //
@@ -101,7 +96,11 @@ static void update_editor(void) {
         BeginDrawing();
         {
             BeginMode3D(EDITOR_CAMERA);
-            { picked_model_id = pick_model(MODELS, 2, GetMousePosition()); }
+            {
+                picked_model_id = pick_model(
+                    SCENE.models, SCENE.n_models, GetMousePosition()
+                );
+            }
             EndMode3D();
         }
         EndDrawing();
@@ -114,7 +113,8 @@ static void update_editor(void) {
     }
 
     if (PICKED_MODEL_ID != -1) {
-        Matrix* transform = &MODELS[PICKED_MODEL_ID]->transform;
+        Model* model = &SCENE.models[PICKED_MODEL_ID];
+        Matrix* transform = &model->transform;
         PICKED_MODEL_POSITION = (Vector3
         ){transform->m12, transform->m13, transform->m14};
         Matrix gizmo_transform = updateGizmo(
@@ -125,10 +125,10 @@ static void update_editor(void) {
 }
 
 int main(void) {
-    const int screen_width = 2560;
-    const int screen_height = 1440;
-    // const int screen_width = 1024;
-    // const int screen_height = 768;
+    // const int screen_width = 2560;
+    // const int screen_height = 1440;
+    const int screen_width = 1024;
+    const int screen_height = 768;
 
     // Window
     InitWindow(screen_width, screen_height, "scene_example");
@@ -141,21 +141,11 @@ int main(void) {
     EDITOR_CAMERA.up = (Vector3){0.0f, 1.0f, 0.0f};
     EDITOR_CAMERA.projection = CAMERA_PERSPECTIVE;
 
-    // Scene Camera
-    GAME_CAMERA.fovy = 45.0f;
-    GAME_CAMERA.target = (Vector3){0.0f, 0.0f, 0.0f};
-    GAME_CAMERA.position = (Vector3){0.0f, 5.0f, 5.0f};
-    GAME_CAMERA.up = (Vector3){0.0f, 1.0f, 0.0f};
-    GAME_CAMERA.projection = CAMERA_PERSPECTIVE;
-
     // Screens
     EDITOR_SCREEN = LoadRenderTexture(screen_width, screen_height);
     GAME_SCREEN = LoadRenderTexture(screen_width / 3, screen_height / 3);
 
     // Scene
-    MODELS[N_MODELS++] = &SCENE.golova.model;
-    MODELS[N_MODELS++] = &SCENE.ground.model;
-
     load_resources();
     load_scene();
     load_picking();

@@ -24,7 +24,7 @@ void main() { \
 } \
 ";
 
-int pick_model(Model** models, size_t n_models, Vector2 mouse_position) {
+int pick_model(Model* models, size_t n_models, Vector2 mouse_position) {
     if (!IS_PICKING_LOADED) {
         TraceLog(LOG_ERROR, "Picking is not loaded");
         exit(1);
@@ -37,7 +37,7 @@ int pick_model(Model** models, size_t n_models, Vector2 mouse_position) {
 
     for (size_t i = 0; i < n_models; ++i) {
         int id_plus_one = i + 1;
-        Model* model = models[i];
+        Model* model = &models[i];
 
         Material material = model->materials[0];
         model->materials[0] = PICKING_MATERIAL;
