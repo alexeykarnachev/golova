@@ -13,6 +13,7 @@
 Camera3D EDITOR_CAMERA;
 RenderTexture EDITOR_SCREEN;
 RenderTexture GAME_SCREEN;
+RGizmo GIZMO;
 
 static int PICKED_MODEL_ID = -1;
 static Vector3 PICKED_MODEL_POSITION;
@@ -51,7 +52,7 @@ static void draw_editor(void) {
         EndMode3D();
 
         if (PICKED_MODEL_ID != -1) {
-            drawGizmo(EDITOR_CAMERA, PICKED_MODEL_POSITION);
+            rgizmo_draw(GIZMO, EDITOR_CAMERA, PICKED_MODEL_POSITION);
         }
     }
     EndTextureMode();
@@ -106,7 +107,7 @@ static void update_editor(void) {
         EndDrawing();
     }
 
-    if (picked_model_id == -1 && gizmoState == GIZMO_COLD) {
+    if (picked_model_id == -1 && GIZMO.state == RGIZMO_STATE_COLD) {
         PICKED_MODEL_ID = -1;
     } else if (picked_model_id != -1) {
         PICKED_MODEL_ID = picked_model_id;
@@ -115,12 +116,13 @@ static void update_editor(void) {
     if (PICKED_MODEL_ID != -1) {
         Model* model = &SCENE.models[PICKED_MODEL_ID];
         Matrix* transform = &model->transform;
+
         PICKED_MODEL_POSITION = (Vector3
         ){transform->m12, transform->m13, transform->m14};
-        Matrix gizmo_transform = updateGizmo(
-            EDITOR_CAMERA, PICKED_MODEL_POSITION
+        rgizmo_update(&GIZMO, EDITOR_CAMERA, PICKED_MODEL_POSITION);
+        *transform = MatrixMultiply(
+            *transform, rgizmo_get_tranform(GIZMO, PICKED_MODEL_POSITION)
         );
-        *transform = MatrixMultiply(*transform, gizmo_transform);
     }
 }
 
@@ -149,7 +151,7 @@ int main(void) {
     load_resources();
     load_scene();
     load_picking();
-    loadGizmo();
+    GIZMO = rgizmo_create();
 
     // Main loop
     while (!WindowShouldClose()) {
@@ -165,7 +167,7 @@ int main(void) {
 
     unload_resources();
     unload_picking();
-    unloadGizmo();
+    rgizmo_unload();
 
     CloseWindow();
 }

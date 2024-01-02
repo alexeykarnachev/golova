@@ -34,7 +34,7 @@ RAYGIZMO_URL=https://github.com/alexeykarnachev/raygizmo/archive/refs/tags/$(RAY
 RAYGIZMO_NAME=raygizmo-${RAYGIZMO_VERSION}
 RAYGIZMO_DIR=$(DEPS_DIR)/$(RAYGIZMO_NAME)
 RAYGIZMO_ARCHIVE_PATH=$(DEPS_DIR)/$(RAYGIZMO_NAME).tar.gz
-RAYGIZMO_SRC_DIR=$(RAYGIZMO_DIR)/src
+RAYGIZMO_SRC_DIR=$(RAYGIZMO_DIR)/include
 
 # ------------------------------------------------------------------------
 # Cimgui
