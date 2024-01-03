@@ -22,6 +22,46 @@ static void draw_scene(void) {
     for (size_t i = 0; i < SCENE.n_models; ++i) {
         DrawModel(SCENE.models[i], (Vector3){0.0, 0.0, 0.0}, 1.0, WHITE);
     }
+
+    // -------------------------------------------------------------------
+    // Draw items
+    Matrix transform = SCENE.models[SCENE.ground.model_id].transform;
+    float sx = transform.m0;
+    float sz = transform.m10;
+    int item_idx = 0;
+    for (size_t i = 0; i < SCENE.ground.grid_size; ++i) {
+        float z = (float)i / (SCENE.ground.grid_size - 1) - 0.5;
+
+        for (size_t j = 0; j < SCENE.ground.grid_size; ++j, ++item_idx) {
+            float x = (float)j / (SCENE.ground.grid_size - 1) - 0.5;
+
+            rlPushMatrix();
+            {
+                rlScalef(0.7, 0.7, 0.7);
+                rlTranslatef(x, 0.8, z);
+                rlScalef(0.1, 1.0, 0.1);
+                rlRotatef(90.0, 1.0, 0.0, 0.0);
+                rlMultMatrixf(MatrixToFloat(transform));
+
+                int atlas_grid_size[2] = {8, 8};
+                SetShaderValue(
+                    ITEMS_SHADER,
+                    GetShaderLocation(ITEMS_SHADER, "atlas_grid_size"),
+                    atlas_grid_size,
+                    SHADER_UNIFORM_IVEC2
+                );
+                SetShaderValue(
+                    ITEMS_SHADER,
+                    GetShaderLocation(ITEMS_SHADER, "item_idx"),
+                    &item_idx,
+                    SHADER_UNIFORM_INT
+                );
+
+                DrawModel(SCENE.ground.item_model, Vector3Zero(), 1.0, WHITE);
+            }
+            rlPopMatrix();
+        }
+    }
 }
 
 static void draw_editor(void) {
@@ -180,8 +220,8 @@ int main(void) {
 
     // Scene
     load_resources();
-    load_scene("scene_0.gsc");
-    // load_scene(NULL);
+    // load_scene("scene_0.gsc");
+    load_scene(NULL);
     load_picking();
     GIZMO = rgizmo_create();
 

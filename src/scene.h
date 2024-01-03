@@ -11,6 +11,8 @@ typedef struct Golova {
 
 typedef struct Ground {
     size_t model_id;
+    size_t grid_size;
+    Model item_model;
 } Ground;
 
 typedef struct GameCamera {

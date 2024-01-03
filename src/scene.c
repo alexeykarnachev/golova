@@ -21,15 +21,30 @@ static size_t add_model(Model model) {
 void load_scene(const char* file_path) {
     float aspect = (float)GOLOVA_TEXTURE.width / GOLOVA_TEXTURE.height;
 
+    // -------------------------------------------------------------------
+    // Load Golova
     Model golova_model = LoadModelFromMesh(GenMeshPlane(aspect, 1.0, 2, 2));
     golova_model.materials[0].maps[0].texture = GOLOVA_TEXTURE;
     golova_model.materials[0].shader = SPRITE_SHADER;
     SCENE.golova.model_id = add_model(golova_model);
 
-    Model ground_model = LoadModelFromMesh(GenMeshPlane(10.0, 10.0, 2, 2));
+    // -------------------------------------------------------------------
+    // Load ground
+    Model ground_model = LoadModelFromMesh(GenMeshPlane(1.0, 1.0, 2, 2));
+    ground_model.transform = MatrixScale(10.0, 1.0, 10.0);
     ground_model.materials[0].shader = GROUND_SHADER;
     SCENE.ground.model_id = add_model(ground_model);
+    SCENE.ground.grid_size = 5;
 
+    // -------------------------------------------------------------------
+    // Load items
+    Model item_model = LoadModelFromMesh(GenMeshPlane(1.0, 1.0, 2, 2));
+    item_model.materials[0].maps[0].texture = ITEMS_TEXTURE;
+    item_model.materials[0].shader = ITEMS_SHADER;
+    SCENE.ground.item_model = item_model;
+
+    // -------------------------------------------------------------------
+    // Load camera
     Vector3 camera_position = (Vector3){0.0f, 2.5f, 2.5f};
     SCENE.camera.c3d.fovy = 60.0f;
     SCENE.camera.c3d.target = (Vector3){0.0f, 0.0f, -1.0f};
@@ -42,6 +57,8 @@ void load_scene(const char* file_path) {
     );
     SCENE.camera.model_id = add_model(camera_model);
 
+    // -------------------------------------------------------------------
+    // Load data from save file
     if (file_path != NULL) {
         int data_size;
         SceneSaveData data = *(SceneSaveData*)LoadFileData(
