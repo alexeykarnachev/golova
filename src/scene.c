@@ -18,7 +18,7 @@ static size_t add_model(Model model) {
     return model_id;
 }
 
-void load_scene(void) {
+void load_scene(const char* file_path) {
     float aspect = (float)GOLOVA_TEXTURE.width / GOLOVA_TEXTURE.height;
 
     Model golova_model = LoadModelFromMesh(GenMeshPlane(aspect, 1.0, 2, 2));
@@ -41,4 +41,26 @@ void load_scene(void) {
         camera_position.x, camera_position.y, camera_position.z
     );
     SCENE.camera.model_id = add_model(camera_model);
+
+    if (file_path != NULL) {
+        int data_size;
+        SceneSaveData data = *(SceneSaveData*)LoadFileData(
+            file_path, &data_size
+        );
+        SCENE.models[SCENE.golova.model_id].transform = data.golova_transform;
+        SCENE.models[SCENE.ground.model_id].transform = data.ground_transform;
+        SCENE.camera.c3d = data.c3d;
+
+        TraceLog(LOG_INFO, "GOLOVA: Scene loaded from %s", file_path);
+    }
+}
+
+void save_scene(const char* file_path) {
+    SceneSaveData data = {0};
+    data.golova_transform = SCENE.models[SCENE.golova.model_id].transform;
+    data.ground_transform = SCENE.models[SCENE.ground.model_id].transform;
+    data.c3d = SCENE.camera.c3d;
+    SaveFileData(file_path, &data, sizeof(SceneSaveData));
+
+    TraceLog(LOG_INFO, "GOLOVA: Scene saved in %s", file_path);
 }

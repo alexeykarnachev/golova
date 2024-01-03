@@ -25,7 +25,7 @@ static void draw_scene(void) {
 }
 
 static void draw_editor(void) {
-    rlEnableBackfaceCulling();
+    rlDisableBackfaceCulling();
 
     BeginTextureMode(EDITOR_SCREEN);
     {
@@ -34,20 +34,20 @@ static void draw_editor(void) {
         {
             draw_scene();
             rlSetLineWidth(1.0);
-            DrawGrid(100.0, 5.0);
+            DrawGrid(10.0, 5.0);
 
             rlSetLineWidth(2.0);
             DrawLine3D(
-                (Vector3){-50.0f, 0.0f, 0.0f}, (Vector3){50.0f, 0.0f, 0.0f}, RED
+                (Vector3){-25.0f, 0.0f, 0.0f}, (Vector3){25.0f, 0.0f, 0.0f}, RED
             );
             DrawLine3D(
-                (Vector3){0.0f, -50.0f, 0.0f},
-                (Vector3){0.0f, 50.0f, 0.0f},
+                (Vector3){0.0f, -25.0f, 0.0f},
+                (Vector3){0.0f, 25.0f, 0.0f},
                 GREEN
             );
             DrawLine3D(
-                (Vector3){0.0f, 0.0f, -50.0f},
-                (Vector3){0.0f, 0.0f, 50.0f},
+                (Vector3){0.0f, 0.0f, -25.0f},
+                (Vector3){0.0f, 0.0f, 25.0f},
                 DARKBLUE
             );
         }
@@ -151,6 +151,10 @@ static void update_editor(void) {
             );
         }
     }
+
+    if (IsKeyPressed(KEY_S) && IsKeyDown(KEY_LEFT_CONTROL)) {
+        save_scene("scene_0.gsc");
+    }
 }
 
 int main(void) {
@@ -176,7 +180,8 @@ int main(void) {
 
     // Scene
     load_resources();
-    load_scene();
+    load_scene("scene_0.gsc");
+    // load_scene(NULL);
     load_picking();
     GIZMO = rgizmo_create();
 

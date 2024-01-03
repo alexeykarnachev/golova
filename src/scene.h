@@ -27,6 +27,13 @@ typedef struct Scene {
     GameCamera camera;
 } Scene;
 
+typedef struct SceneSaveData {
+    Matrix golova_transform;
+    Matrix ground_transform;
+    Camera3D c3d;
+} SceneSaveData;
+
 extern Scene SCENE;
 
-void load_scene(void);
+void load_scene(const char* file_path);
+void save_scene(const char* file_path);
