@@ -12,6 +12,7 @@ void main() {
     vec4 tex_color = texture(texture0, fragTexCoord);
     if (tex_color.a < 0.01) discard;
 
-    finalColor = tex_color*colDiffuse;
+    // finalColor = tex_color*colDiffuse;
+    finaleColor = vec4(1.0, 0.0, 0.0, 1.0);
 }
 
