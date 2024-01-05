@@ -3,7 +3,6 @@
 #include "raylib.h"
 #include "raymath.h"
 #include "rlgl.h"
-#include <stdio.h>
 #include <stdlib.h>
 
 #define PICKING_FBO_WIDTH 500
@@ -15,19 +14,19 @@ static unsigned int PICKING_TEXTURE;
 static unsigned int PICKING_DEPTH_TEXTURE;
 static Material PICKING_MATERIAL;
 
-static int PICKING_SHADER_ID_LOC;
-static const char* PICKING_SHADER_FRAG = "\
-#version 330\n\
-uniform int u_id; \
-out vec4 finalColor; \
-void main() { \
-    finalColor = vec4(float(u_id)/255.0, 0, 0, 0); \
-} \
-";
+// static int PICKING_SHADER_ID_LOC;
+// static const char* PICKING_SHADER_FRAG = "\
+// #version 330\n\
+// uniform int u_id; \
+// out vec4 finalColor; \
+// void main() { \
+//     finalColor = vec4(float(u_id)/255.0, 0, 0, 0); \
+// } \
+// ";
 
-static int pick_model(Model* models, size_t n_models, Vector2 mouse_position) {
+static int pick_mesh(Mesh* meshes, size_t n_meshes, Vector2 mouse_position) {
     if (!IS_PICKING_LOADED) {
-        TraceLog(LOG_ERROR, "GOLOVA: Picking is not loaded");
+        TraceLog(LOG_ERROR, "Picking is not loaded");
         exit(1);
     }
 
@@ -36,23 +35,17 @@ static int pick_model(Model* models, size_t n_models, Vector2 mouse_position) {
     rlClearScreenBuffers();
     rlDisableColorBlend();
 
-    for (size_t i = 0; i < n_models; ++i) {
+    for (size_t i = 0; i < n_meshes; ++i) {
         int id_plus_one = i + 1;
-        Model* model = &models[i];
-
-        Material material = model->materials[0];
-        model->materials[0] = PICKING_MATERIAL;
-        for (size_t mesh_id = 0; mesh_id < model->meshCount; ++mesh_id) {
-            SetModelMeshMaterial(model, mesh_id, 0);
-        }
-
-        SetShaderValue(
-            PICKING_MATERIAL.shader,
-            PICKING_SHADER_ID_LOC,
-            &id_plus_one,
-            SHADER_UNIFORM_INT
-        );
-        DrawModel(*model, (Vector3){0.0, 0.0, 0.0}, 1.0, BLANK);
+        Mesh mesh = meshes[i];
+        // SetShaderValue(
+        //     PICKING_MATERIAL.shader,
+        //     PICKING_SHADER_ID_LOC,
+        //     &id_plus_one,
+        //     SHADER_UNIFORM_INT
+        // );
+        // DrawModel(*model, (Vector3){0.0, 0.0, 0.0}, 1.0, BLANK);
+        DrawMesh(mesh, PICKING_MATERIAL, Matrix transform);
 
         model->materials[0] = material;
     }
@@ -102,13 +95,13 @@ int pick_model_3d(
 
 void load_picking(void) {
     if (IS_PICKING_LOADED) {
-        TraceLog(LOG_WARNING, "GOLOVA: Picking is already loaded");
+        TraceLog(LOG_WARNING, "Picking is already loaded");
         return;
     };
 
     PICKING_FBO = rlLoadFramebuffer(PICKING_FBO_WIDTH, PICKING_FBO_HEIGHT);
     if (!PICKING_FBO) {
-        TraceLog(LOG_ERROR, "GOLOVA: Failed to create picking fbo");
+        TraceLog(LOG_ERROR, "Failed to create picking fbo");
         exit(1);
     }
     rlEnableFramebuffer(PICKING_FBO);
@@ -141,26 +134,26 @@ void load_picking(void) {
     );
 
     if (!rlFramebufferComplete(PICKING_FBO)) {
-        TraceLog(LOG_ERROR, "GOLOVA: Picking fbo is not complete");
+        TraceLog(LOG_ERROR, "Picking fbo is not complete");
         exit(1);
     }
 
-    Shader shader = LoadShaderFromMemory(0, PICKING_SHADER_FRAG);
-    if (!IsShaderReady(shader)) {
-        TraceLog(LOG_ERROR, "GOLOVA: Failed to load picking shader");
-        exit(1);
-    }
-    PICKING_SHADER_ID_LOC = GetShaderLocation(shader, "u_id");
+    // Shader shader = LoadShaderFromMemory(0, PICKING_SHADER_FRAG);
+    // if (!IsShaderReady(shader)) {
+    //     TraceLog(LOG_ERROR, "Failed to load picking shader");
+    //     exit(1);
+    // }
+    // PICKING_SHADER_ID_LOC = GetShaderLocation(shader, "u_id");
 
     PICKING_MATERIAL = LoadMaterialDefault();
-    PICKING_MATERIAL.shader = shader;
+    // PICKING_MATERIAL.shader = shader;
 
     IS_PICKING_LOADED = true;
 }
 
 void unload_picking(void) {
     if (!IS_PICKING_LOADED) {
-        TraceLog(LOG_WARNING, "GOLOVA: Picking is not loaded");
+        TraceLog(LOG_WARNING, "Picking is not loaded");
         return;
     };
 

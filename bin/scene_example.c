@@ -44,7 +44,6 @@ static void draw_scene(void) {
     rlTranslatef(t.translation.x, t.translation.y, t.translation.z);
     DrawModel(model, Vector3Zero(), 1.0, WHITE);
     rlPopMatrix();
-    
 
     // -------------------------------------------------------------------
     // Draw items
@@ -80,7 +79,8 @@ static void draw_scene(void) {
     //                 SHADER_UNIFORM_INT
     //             );
 
-    //             DrawModel(SCENE.ground.item_model, Vector3Zero(), 1.0, WHITE);
+    //             DrawModel(SCENE.ground.item_model, Vector3Zero(), 1.0,
+    //             WHITE);
     //         }
     //         rlPopMatrix();
     //     }
@@ -149,17 +149,20 @@ static void draw_editor(void) {
                 // Draw camera inspector
                 int node = igCollapsingHeader_TreeNodeFlags("Camera", 0);
                 igPushItemWidth(150.0);
-                igDragFloat("FOV", &SCENE.camera.c3d.fovy, 1.0, 10.0, 170.0, "%.1f", 0);
+                igDragFloat(
+                    "FOV", &SCENE.camera.c3d.fovy, 1.0, 10.0, 170.0, "%.1f", 0
+                );
                 igPopItemWidth();
 
                 // Draw picked model transform inspector
                 node = igCollapsingHeader_TreeNodeFlags("Transform", 0);
                 if (PICKED_ID != -1) {
-                    Matrix *t = &SCENE.models[PICKED_ID].transform;
-    // float m0, m4, m8, m12;  // Matrix first row (4 components)
-    // float m1, m5, m9, m13;  // Matrix second row (4 components)
-    // float m2, m6, m10, m14; // Matrix third row (4 components)
-    // float m3, m7, m11, m15; // Matrix fourth row (4 components)
+                    Matrix* t = &SCENE.models[PICKED_ID].transform;
+                    // float m0, m4, m8, m12;  // Matrix first row (4
+                    // components) float m1, m5, m9, m13;  // Matrix second row
+                    // (4 components) float m2, m6, m10, m14; // Matrix third
+                    // row (4 components) float m3, m7, m11, m15; // Matrix
+                    // fourth row (4 components)
                     float scale[3] = {t->m0, t->m5, t->m10};
                     igPushItemWidth(150.0);
                     igDragFloat3("Scale", scale, 0.1, 0.1, 100.0, "%.1f", 0);
@@ -170,22 +173,22 @@ static void draw_editor(void) {
                     t->m10 = scale[2];
                 }
 
-                // Transformation* transformation = &SCENE.transformations[SCENE.camera];
-                // Vec2 pos = transformation->curr_position;
-                // float orient = transformation->curr_orientation;
+                // Transformation* transformation =
+                // &SCENE.transformations[SCENE.camera]; Vec2 pos =
+                // transformation->curr_position; float orient =
+                // transformation->curr_orientation;
 
-                // ig_drag_float2("pos.", (float*)&pos, -FLT_MAX, FLT_MAX, 0.05, 0);
-                // ig_drag_float("orient.", &orient, -PI, PI, 0.05, 0);
+                // ig_drag_float2("pos.", (float*)&pos, -FLT_MAX, FLT_MAX, 0.05,
+                // 0); ig_drag_float("orient.", &orient, -PI, PI, 0.05, 0);
                 // update_position(SCENE.camera, pos);
                 // update_orientation(SCENE.camera, orient);
 
                 // ig_drag_float(
-                //     "view width", &SCENE.camera_view_width, 0.0, 1000.0, 0.2, 0
+                //     "view width", &SCENE.camera_view_width, 0.0, 1000.0, 0.2,
+                //     0
                 // );
             }
             igEnd();
-
-
         }
         end_imgui();
     }
@@ -243,7 +246,7 @@ static void update_editor(void) {
     }
 
     if (PICKED_ID != -1) {
-        Transform *t = &SCENE.transforms[PICKED_ID];
+        Transform* t = &SCENE.transforms[PICKED_ID];
         rgizmo_update(&GIZMO, EDITOR_CAMERA, t->translation);
         t->translation = Vector3Add(t->translation, GIZMO.update.translation);
 
