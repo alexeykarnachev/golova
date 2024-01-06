@@ -12,6 +12,8 @@
 #define MAX_N_MATERIALS 256
 #define MAX_N_MESHES 256
 
+#define print_vector3(v) printf("%f, %f, %f\n", v.x, v.y, v.z)
+
 typedef struct Golova {
     int id;
 } Golova;
@@ -20,12 +22,15 @@ typedef struct Ground {
     int id;
 } Ground;
 
-typedef struct GameCamera {
+typedef struct CameraShell {
     int id;
-    Camera3D c;
-} GameCamera;
+    Camera3D* camera;
+} CameraShell;
 
-typedef enum Mode { EDITOR_MODE, GAME_MODE } Mode;
+typedef enum Mode {
+    EDITOR_MODE,
+    GAME_MODE,
+} Mode;
 
 Mode MODE;
 
@@ -39,6 +44,7 @@ RenderTexture PICKING_SCREEN;
 Material PICKING_MATERIAL;
 
 Camera3D EDITOR_CAMERA;
+Camera3D GAME_CAMERA;
 
 int N_MATERIALS = 0;
 Material MATERIALS[MAX_N_MATERIALS];
@@ -53,7 +59,7 @@ int MESH_IDS[MAX_N_ENTITIES];
 
 Golova GOLOVA;
 Ground GROUND;
-GameCamera GAME_CAMERA;
+CameraShell GAME_CAMERA_SHELL;
 
 RGizmo GIZMO;
 
@@ -70,8 +76,12 @@ static void load_golova(void) {
     MATERIAL_IDS[entity_id] = material_id;
 
     MATERIALS[material_id] = LoadMaterialDefault();
-    MATERIALS[material_id].shader = LoadShader(0, "resources/shaders/sprite.frag");
-    MATERIALS[material_id].maps[0].texture = LoadTexture("resources/textures/golova.png");
+    MATERIALS[material_id].shader = LoadShader(
+        0, "resources/shaders/sprite.frag"
+    );
+    MATERIALS[material_id].maps[0].texture = LoadTexture(
+        "resources/textures/golova.png"
+    );
 
     float w = (float)MATERIALS[material_id].maps[0].texture.width;
     float h = (float)MATERIALS[material_id].maps[0].texture.height;
@@ -91,24 +101,29 @@ static void load_ground(void) {
     MATERIAL_IDS[entity_id] = material_id;
 
     MATERIALS[material_id] = LoadMaterialDefault();
-    MATERIALS[material_id].shader = LoadShader(0, "resources/shaders/ground.frag");
+    MATERIALS[material_id].shader = LoadShader(
+        0, "resources/shaders/ground.frag"
+    );
     MESHES[mesh_id] = GenMeshPlane(1.0, 1.0, 2, 2);
 }
 
 static void load_game_camera(void) {
+    // Camera object
+    GAME_CAMERA.fovy = 60.0f;
+    GAME_CAMERA.up = (Vector3){0.0f, 1.0f, 0.0f};
+    GAME_CAMERA.projection = CAMERA_PERSPECTIVE;
+
+    // Camera shell object (mesh for controlling in editor mode)
     int entity_id = N_ENTITIES++;
     int material_id = N_MATERIALS++;
     int mesh_id = N_MESHES++;
 
-    GAME_CAMERA.id = entity_id;
-    GAME_CAMERA.c.fovy = 45.0f;
-    GAME_CAMERA.c.target = (Vector3){0.0f, 0.0f, -1.0f};
-    GAME_CAMERA.c.up = (Vector3){0.0f, 1.0f, 0.0f};
-    GAME_CAMERA.c.projection = CAMERA_PERSPECTIVE;
+    GAME_CAMERA_SHELL.id = entity_id;
+    GAME_CAMERA_SHELL.camera = &GAME_CAMERA;
 
-    TRANSFORMS[GAME_CAMERA.id].translation = (Vector3){0.0, 2.0, 2.0};
-    TRANSFORMS[GAME_CAMERA.id].scale = Vector3One();
-    TRANSFORMS[GAME_CAMERA.id].rotation.w = 1.0;
+    TRANSFORMS[entity_id].translation = (Vector3){0.0, 2.0, 2.0};
+    TRANSFORMS[entity_id].scale = Vector3One();
+    TRANSFORMS[entity_id].rotation.w = 1.0;
     MESH_IDS[entity_id] = mesh_id;
     MATERIAL_IDS[entity_id] = material_id;
 
@@ -118,13 +133,26 @@ static void load_game_camera(void) {
     MESHES[mesh_id] = GenMeshSphere(0.1, 16, 16);
 }
 
-static void draw_scene(
-    RenderTexture screen, Color clear_color, Camera3D camera, bool is_picking
-) {
-    rlDisableBackfaceCulling();
+static void load_editor_camera(void) {
+    EDITOR_CAMERA.fovy = 45.0f;
+    EDITOR_CAMERA.target = (Vector3){0.0f, 0.0f, 0.0f};
+    EDITOR_CAMERA.position = (Vector3){5.0f, 5.0f, 5.0f};
+    EDITOR_CAMERA.up = (Vector3){0.0f, 1.0f, 0.0f};
+    EDITOR_CAMERA.projection = CAMERA_PERSPECTIVE;
+}
 
-    int mesh_ids[3] = {GOLOVA.id, GROUND.id, GAME_CAMERA.id};
-    size_t n_meshes = sizeof(mesh_ids) / sizeof(int);
+static void draw_scene(
+    RenderTexture screen,
+    Color clear_color,
+    Camera3D camera,
+    bool is_picking,
+    bool is_editor
+) {
+    static int mesh_ids[MAX_N_MESHES] = {-1};
+    size_t n_meshes = 0;
+    mesh_ids[n_meshes++] = GOLOVA.id;
+    mesh_ids[n_meshes++] = GROUND.id;
+    if (is_editor) mesh_ids[n_meshes++] = GAME_CAMERA_SHELL.id;
 
     BeginTextureMode(screen);
     {
@@ -134,6 +162,7 @@ static void draw_scene(
             // Draw meshes
             for (size_t i = 0; i < n_meshes; ++i) {
                 int id = mesh_ids[i];
+
                 Mesh mesh = MESHES[MESH_IDS[id]];
                 Transform transform = TRANSFORMS[id];
 
@@ -144,8 +173,6 @@ static void draw_scene(
                 } else {
                     material = MATERIALS[MATERIAL_IDS[id]];
                 }
-
-                if (id == GAME_CAMERA.id) rlEnableBackfaceCulling();
 
                 Vector3 axis;
                 float angle;
@@ -164,9 +191,6 @@ static void draw_scene(
                 }
                 rlPopMatrix();
             }
-
-            // Draw game camera sphere
-            // rlEnableBackfaceCulling();
         }
         EndMode3D();
     }
@@ -204,6 +228,17 @@ static int get_entity_id_under_cursor(void) {
     return id;
 }
 
+void update_camera_shell(CameraShell* camera_shell) {
+    Transform t = TRANSFORMS[camera_shell->id];
+    camera_shell->camera->position = t.translation;
+    Vector3 dir = Vector3RotateByQuaternion(
+        (Vector3){0.0, 0.0, -1.0}, t.rotation
+    );
+    camera_shell->camera->target = Vector3Add(
+        camera_shell->camera->position, dir
+    );
+}
+
 int main(void) {
     // -------------------------------------------------------------------
     // Load window
@@ -225,36 +260,25 @@ int main(void) {
     load_golova();
     load_ground();
     load_game_camera();
-
-    // Editor camera
-    EDITOR_CAMERA.fovy = 45.0f;
-    EDITOR_CAMERA.target = (Vector3){0.0f, 0.0f, 0.0f};
-    EDITOR_CAMERA.position = (Vector3){5.0f, 5.0f, 5.0f};
-    EDITOR_CAMERA.up = (Vector3){0.0f, 1.0f, 0.0f};
-    EDITOR_CAMERA.projection = CAMERA_PERSPECTIVE;
+    load_editor_camera();
 
     // -------------------------------------------------------------------
     // Main loop
     while (!WindowShouldClose()) {
-        // Update game camera
-        Transform t = TRANSFORMS[GAME_CAMERA.id];
-        Vector3 offset = Vector3Subtract(t.translation, GAME_CAMERA.c.position);
-        Vector3 target = (Vector3){0.0, 0.0, -1.0};
-        target = Vector3Add(target, offset);
-        target = Vector3RotateByQuaternion(target, t.rotation);
-        GAME_CAMERA.c.position = t.translation;
-        GAME_CAMERA.c.target = Vector3Add(GAME_CAMERA.c.position, target);
-
         if (MODE == EDITOR_MODE) {
+            rlDisableBackfaceCulling();
+
+            update_camera_shell(&GAME_CAMERA_SHELL);
+
             // Draw scene
-            draw_scene(FULL_SCREEN, DARKGRAY, EDITOR_CAMERA, false);
-            draw_scene(PREVIEW_SCREEN, BLACK, GAME_CAMERA.c, false);
+            draw_scene(FULL_SCREEN, DARKGRAY, EDITOR_CAMERA, false, true);
+            draw_scene(PREVIEW_SCREEN, BLACK, GAME_CAMERA, false, false);
 
             // Update picked id
             static int PICKED_ID = -1;
             int picked_id = PICKED_ID;
             if (IsMouseButtonReleased(0) && GIZMO.state == RGIZMO_STATE_COLD) {
-                draw_scene(PICKING_SCREEN, BLANK, EDITOR_CAMERA, true);
+                draw_scene(PICKING_SCREEN, BLANK, EDITOR_CAMERA, true, true);
                 picked_id = get_entity_id_under_cursor();
             }
 
@@ -287,13 +311,17 @@ int main(void) {
             {
                 blit_screen(FULL_SCREEN, Vector2Zero());
 
-                Vector2 p = {FULL_SCREEN.texture.width - PREVIEW_SCREEN.texture.width, 0.0};
+                Vector2 p = {
+                    FULL_SCREEN.texture.width - PREVIEW_SCREEN.texture.width,
+                    0.0};
                 blit_screen(PREVIEW_SCREEN, p);
             }
             EndDrawing();
         } else if (MODE == GAME_MODE) {
+            rlEnableBackfaceCulling();
+
             // Draw scene
-            draw_scene(FULL_SCREEN, BLACK, GAME_CAMERA.c, false);
+            draw_scene(FULL_SCREEN, BLACK, GAME_CAMERA, false, false);
             // draw_scene(PICKING_SCREEN, BLANK, GAME_CAMERA, true);
 
             // Blit screens
