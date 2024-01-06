@@ -27,6 +27,16 @@ typedef struct Golova {
 
 typedef struct Ground {
     int id;
+
+    struct {
+        int dimension[2];
+        float scale;
+    } grid;
+
+    struct {
+        float scale;
+        float elevation;
+    } item;
 } Ground;
 
 typedef struct CameraShell {
@@ -51,6 +61,9 @@ RenderTexture PREVIEW_SCREEN;
 RenderTexture PICKING_SCREEN;
 
 Material PICKING_MATERIAL;
+Material ITEM_MATERIAL;
+
+Mesh PLANE_MESH;
 
 Camera3D EDITOR_CAMERA;
 Camera3D GAME_CAMERA;
@@ -74,6 +87,19 @@ RGizmo GIZMO;
 
 bool IS_IMGUI_INTERACTED;
 int PICKED_ID = -1;
+
+static void rl_transform(Transform transform) {
+    Vector3 axis;
+    float angle;
+    Vector3 t = transform.translation;
+    Vector3 s = transform.scale;
+    Quaternion q = transform.rotation;
+    QuaternionToAxisAngle(q, &axis, &angle);
+
+    rlTranslatef(t.x, t.y, t.z);
+    rlRotatef(angle * RAD2DEG, axis.x, axis.y, axis.z);
+    rlScalef(s.x, s.y, s.z);
+}
 
 static void load_imgui(void) {
     igCreateContext(NULL);
@@ -110,6 +136,7 @@ static void load_golova(void) {
 }
 
 static void load_ground(void) {
+    // Ground
     int entity_id = N_ENTITIES++;
     int material_id = N_MATERIALS++;
     int mesh_id = N_MESHES++;
@@ -126,6 +153,15 @@ static void load_ground(void) {
         0, "resources/shaders/ground.frag"
     );
     MESHES[mesh_id] = GenMeshPlane(1.0, 1.0, 2, 2);
+
+    // Grid
+    GROUND.grid.dimension[0] = 4;
+    GROUND.grid.dimension[1] = 3;
+    GROUND.grid.scale = 0.7;
+
+    // Item
+    GROUND.item.scale = 0.1;
+    GROUND.item.elevation = 0.0;
 }
 
 static void load_game_camera(void) {
@@ -195,19 +231,9 @@ static void draw_scene(
                     material = MATERIALS[MATERIAL_IDS[id]];
                 }
 
-                Vector3 axis;
-                float angle;
                 rlPushMatrix();
                 {
-                    Vector3* t = &transform.translation;
-                    Vector3* s = &transform.scale;
-                    Quaternion* q = &transform.rotation;
-                    QuaternionToAxisAngle(*q, &axis, &angle);
-
-                    rlTranslatef(t->x, t->y, t->z);
-                    rlRotatef(angle * RAD2DEG, axis.x, axis.y, axis.z);
-                    rlScalef(s->x, s->y, s->z);
-
+                    rl_transform(transform);
                     DrawMesh(mesh, material, MatrixIdentity());
                 }
                 rlPopMatrix();
@@ -254,6 +280,54 @@ static void draw_scene(
     EndTextureMode();
 }
 
+static void draw_items(RenderTexture screen, Camera3D camera, bool is_picking) {
+    Transform transform = TRANSFORMS[GROUND.id];
+    transform.scale = Vector3Scale(Vector3One(), transform.scale.x);
+
+    BeginTextureMode(screen);
+    BeginMode3D(camera);
+
+    int item_idx = 0;
+    for (size_t i = 0; i < GROUND.grid.dimension[0]; ++i) {
+        float z = (float)i / (GROUND.grid.dimension[0] - 1) - 0.5;
+
+        for (size_t j = 0; j < GROUND.grid.dimension[1]; ++j, ++item_idx) {
+            float x = (float)j / (GROUND.grid.dimension[1] - 1) - 0.5;
+
+            rlPushMatrix();
+
+            rl_transform(transform);
+
+            rlScalef(GROUND.grid.scale, GROUND.grid.scale, GROUND.grid.scale);
+            rlTranslatef(x, GROUND.item.elevation, z);
+            rlScalef(GROUND.item.scale, GROUND.item.scale, GROUND.item.scale);
+
+            rlRotatef(90.0, 1.0, 0.0, 0.0);
+
+            int atlas_grid_size[2] = {8, 8};
+            SetShaderValue(
+                ITEM_MATERIAL.shader,
+                GetShaderLocation(ITEM_MATERIAL.shader, "atlas_grid_size"),
+                atlas_grid_size,
+                SHADER_UNIFORM_IVEC2
+            );
+            SetShaderValue(
+                ITEM_MATERIAL.shader,
+                GetShaderLocation(ITEM_MATERIAL.shader, "item_idx"),
+                &item_idx,
+                SHADER_UNIFORM_INT
+            );
+
+            DrawMesh(PLANE_MESH, ITEM_MATERIAL, MatrixIdentity());
+
+            rlPopMatrix();
+        }
+    }
+
+    EndMode3D();
+    EndTextureMode();
+}
+
 static void draw_imgui(void) {
     ImGui_ImplOpenGL3_NewFrame();
     ImGui_ImplGlfw_NewFrame();
@@ -277,11 +351,37 @@ static void draw_imgui(void) {
             igPopItemWidth();
         }
 
+        if (igCollapsingHeader_TreeNodeFlags("Ground", tree_node_open)) {
+            igPushItemWidth(150.0);
+
+            igSeparatorText("Grid");
+            igDragInt2(
+                "Dimension##grid", GROUND.grid.dimension, 1, 1, 5, "%d", 0
+            );
+            igDragFloat(
+                "Scale##grid", &GROUND.grid.scale, 0.01, 0.01, 1.0, "%.3f", 0
+            );
+
+            igSeparatorText("Item");
+            igDragFloat(
+                "Elevation##item",
+                &GROUND.item.elevation,
+                0.01,
+                0.01,
+                1.0,
+                "%.3f",
+                0
+            );
+            igDragFloat(
+                "Scale##item", &GROUND.item.scale, 0.01, 0.01, 1.0, "%.3f", 0
+            );
+            igPopItemWidth();
+        }
+
         // Draw picked model transform inspector
         if (igCollapsingHeader_TreeNodeFlags("Transform", tree_node_open)
             && PICKED_ID != -1) {
             Transform* t = &TRANSFORMS[PICKED_ID];
-            igPushItemWidth(150.0);
             igDragFloat3(
                 "Scale", (float*)&t->scale, 0.1, 0.1, 100.0, "%.1f", 0
             );
@@ -299,7 +399,6 @@ static void draw_imgui(void) {
             igDragFloat3("Rotation", (float*)&e, 5.0, -180.0, 180.0, "%.2f", 0);
             e = Vector3Scale(e, DEG2RAD);
             t->rotation = QuaternionFromEuler(e.x, e.y, e.z);
-            igPopItemWidth();
         }
     }
     igEnd();
@@ -395,6 +494,11 @@ int main(void) {
     MODE = EDITOR_MODE;
     GIZMO = rgizmo_create();
     PICKING_MATERIAL = LoadMaterialDefault();
+    ITEM_MATERIAL = LoadMaterialDefault();
+    ITEM_MATERIAL.shader = LoadShader(0, "resources/shaders/item.frag");
+    ITEM_MATERIAL.maps[0].texture = LoadTexture("resources/textures/items_0.png"
+    );
+    PLANE_MESH = GenMeshPlane(1.0, 1.0, 2, 2);
     FULL_SCREEN = LoadRenderTexture(SCREEN_WIDTH, SCREEN_HEIGHT);
     PREVIEW_SCREEN = LoadRenderTexture(SCREEN_WIDTH / 3, SCREEN_HEIGHT / 3);
     PICKING_SCREEN = LoadRenderTexture(SCREEN_WIDTH / 3, SCREEN_HEIGHT / 3);
@@ -424,6 +528,8 @@ int main(void) {
             // Draw scene
             draw_scene(FULL_SCREEN, DARKGRAY, EDITOR_CAMERA, false, true);
             draw_scene(PREVIEW_SCREEN, BLACK, GAME_CAMERA, false, false);
+            draw_items(FULL_SCREEN, EDITOR_CAMERA, false);
+            draw_items(PREVIEW_SCREEN, GAME_CAMERA, false);
 
             // Update picked id
             int picked_id = PICKED_ID;
@@ -476,6 +582,7 @@ int main(void) {
 
             // Draw scene
             draw_scene(FULL_SCREEN, BLACK, GAME_CAMERA, false, false);
+            draw_items(FULL_SCREEN, GAME_CAMERA, false);
             // draw_scene(PICKING_SCREEN, BLANK, GAME_CAMERA, true);
 
             // Blit screens
@@ -488,6 +595,8 @@ int main(void) {
     // -------------------------------------------------------------------
     // Unload the Scene
     UnloadMaterial(PICKING_MATERIAL);
+    UnloadMaterial(ITEM_MATERIAL);
+    UnloadMesh(PLANE_MESH);
     rgizmo_unload();
 
     UnloadRenderTexture(PICKING_SCREEN);
