@@ -8,6 +8,13 @@
 #define RAYGIZMO_IMPLEMENTATION
 #include "raygizmo.h"
 
+#define CIMGUI_DEFINE_ENUMS_AND_STRUCTS
+#define CIMGUI_USE_GLFW
+#define CIMGUI_USE_OPENGL3
+#include "cimgui.h"
+#include "cimgui_impl.h"
+#include <GLFW/glfw3.h>
+
 #define MAX_N_ENTITIES 256
 #define MAX_N_MATERIALS 256
 #define MAX_N_MESHES 256
@@ -34,8 +41,10 @@ typedef enum Mode {
 
 Mode MODE;
 
-int SCREEN_WIDTH = 1024;
-int SCREEN_HEIGHT = 768;
+// int SCREEN_WIDTH = 1024;
+// int SCREEN_HEIGHT = 768;
+int SCREEN_WIDTH = 2560;
+int SCREEN_HEIGHT = 1440;
 
 RenderTexture FULL_SCREEN;
 RenderTexture PREVIEW_SCREEN;
@@ -62,6 +71,18 @@ Ground GROUND;
 CameraShell GAME_CAMERA_SHELL;
 
 RGizmo GIZMO;
+
+bool IS_IMGUI_INTERACTED;
+int PICKED_ID = -1;
+
+static void load_imgui(void) {
+    igCreateContext(NULL);
+    GLFWwindow* window = (GLFWwindow*)GetWindowHandle();
+    glfwGetWindowUserPointer(window);
+    ImGui_ImplGlfw_InitForOpenGL(window, true);
+    ImGui_ImplOpenGL3_Init("#version 330");
+    igStyleColorsDark(NULL);
+}
 
 static void load_golova(void) {
     int entity_id = N_ENTITIES++;
@@ -183,9 +204,9 @@ static void draw_scene(
                     Quaternion* q = &transform.rotation;
                     QuaternionToAxisAngle(*q, &axis, &angle);
 
-                    rlScalef(s->x, s->y, s->z);
                     rlTranslatef(t->x, t->y, t->z);
                     rlRotatef(angle * RAD2DEG, axis.x, axis.y, axis.z);
+                    rlScalef(s->x, s->y, s->z);
 
                     DrawMesh(mesh, material, MatrixIdentity());
                 }
@@ -231,6 +252,60 @@ static void draw_scene(
         }
     }
     EndTextureMode();
+}
+
+static void draw_imgui(void) {
+    ImGui_ImplOpenGL3_NewFrame();
+    ImGui_ImplGlfw_NewFrame();
+    igNewFrame();
+
+    ImGuiIO* io = igGetIO();
+    IS_IMGUI_INTERACTED = io->WantCaptureMouse || io->WantCaptureKeyboard;
+
+    // Place next window on top left
+    ImVec2 position = {0.0, 0.0};
+    igSetNextWindowPos(position, ImGuiCond_Always, (ImVec2){0.0, 0.0});
+    igSetNextWindowSize((ImVec2){0.0, 0.0}, ImGuiCond_Always);
+
+    // Draw inspector
+    if (igBegin("Inspector", NULL, 0)) {
+        int tree_node_open = ImGuiTreeNodeFlags_DefaultOpen;
+        // Draw camera inspector
+        if (igCollapsingHeader_TreeNodeFlags("Camera", tree_node_open)) {
+            igPushItemWidth(150.0);
+            igDragFloat("FOV", &GAME_CAMERA.fovy, 1.0, 10.0, 170.0, "%.1f", 0);
+            igPopItemWidth();
+        }
+
+        // Draw picked model transform inspector
+        if (igCollapsingHeader_TreeNodeFlags("Transform", tree_node_open)
+            && PICKED_ID != -1) {
+            Transform* t = &TRANSFORMS[PICKED_ID];
+            igPushItemWidth(150.0);
+            igDragFloat3(
+                "Scale", (float*)&t->scale, 0.1, 0.1, 100.0, "%.1f", 0
+            );
+            igDragFloat3(
+                "Translation",
+                (float*)&t->translation,
+                0.1,
+                -100.0,
+                100.0,
+                "%.2f",
+                0
+            );
+
+            Vector3 e = Vector3Scale(QuaternionToEuler(t->rotation), RAD2DEG);
+            igDragFloat3("Rotation", (float*)&e, 5.0, -180.0, 180.0, "%.2f", 0);
+            e = Vector3Scale(e, DEG2RAD);
+            t->rotation = QuaternionFromEuler(e.x, e.y, e.z);
+            igPopItemWidth();
+        }
+    }
+    igEnd();
+
+    igRender();
+    ImGui_ImplOpenGL3_RenderDrawData(igGetDrawData());
 }
 
 static void blit_screen(RenderTexture screen, Vector2 position) {
@@ -314,6 +389,7 @@ int main(void) {
 
     // -------------------------------------------------------------------
     // Load the Scene
+    load_imgui();
 
     // Common
     MODE = EDITOR_MODE;
@@ -332,8 +408,10 @@ int main(void) {
     // -------------------------------------------------------------------
     // Main loop
     while (!WindowShouldClose()) {
+        bool is_enter_pressed = IsKeyPressed(KEY_ENTER) && !IS_IMGUI_INTERACTED;
+        bool is_lmb_released = IsMouseButtonReleased(0) && !IS_IMGUI_INTERACTED;
 
-        if (IsKeyPressed(KEY_ENTER)) {
+        if (is_enter_pressed) {
             MODE = MODE == EDITOR_MODE ? GAME_MODE : EDITOR_MODE;
         }
 
@@ -348,9 +426,8 @@ int main(void) {
             draw_scene(PREVIEW_SCREEN, BLACK, GAME_CAMERA, false, false);
 
             // Update picked id
-            static int PICKED_ID = -1;
             int picked_id = PICKED_ID;
-            if (IsMouseButtonReleased(0) && GIZMO.state == RGIZMO_STATE_COLD) {
+            if (is_lmb_released && GIZMO.state == RGIZMO_STATE_COLD) {
                 draw_scene(PICKING_SCREEN, BLANK, EDITOR_CAMERA, true, true);
                 picked_id = get_entity_id_under_cursor();
             }
@@ -378,6 +455,10 @@ int main(void) {
                 rgizmo_draw(GIZMO, EDITOR_CAMERA, t->translation);
                 EndTextureMode();
             }
+
+            BeginTextureMode(FULL_SCREEN);
+            draw_imgui();
+            EndTextureMode();
 
             // Blit screens
             BeginDrawing();
