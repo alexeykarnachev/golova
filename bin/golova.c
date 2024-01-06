@@ -130,7 +130,7 @@ static void load_game_camera(void) {
     MATERIALS[material_id] = LoadMaterialDefault();
     MATERIALS[material_id].maps[0].color = PINK;
 
-    MESHES[mesh_id] = GenMeshSphere(0.1, 16, 16);
+    MESHES[mesh_id] = GenMeshSphere(0.2, 16, 16);
 }
 
 static void load_editor_camera(void) {
@@ -190,9 +190,45 @@ static void draw_scene(
                     DrawMesh(mesh, material, MatrixIdentity());
                 }
                 rlPopMatrix();
+
+                // Draw game camera shell view ray
+                if (id == GAME_CAMERA_SHELL.id) {
+                    rlSetLineWidth(4.0);
+                    Vector3 start = GAME_CAMERA_SHELL.camera->position;
+                    Vector3 target = GAME_CAMERA_SHELL.camera->target;
+                    Vector3 dir = Vector3Normalize(
+                        Vector3Subtract(target, start)
+                    );
+                    Vector3 end = Vector3Add(start, Vector3Scale(dir, 1.0));
+                    DrawLine3D(start, end, PINK);
+                }
             }
         }
         EndMode3D();
+
+        // Draw editor grid
+        if (is_editor) {
+            BeginMode3D(camera);
+            {
+                rlSetLineWidth(1.0);
+                DrawGrid(10.0, 5.0);
+                float d = 25.0f;
+
+                rlSetLineWidth(2.0);
+                DrawLine3D(
+                    (Vector3){-d, 0.0f, 0.0f}, (Vector3){d, 0.0f, 0.0f}, RED
+                );
+                DrawLine3D(
+                    (Vector3){0.0f, -d, 0.0f}, (Vector3){0.0f, d, 0.0f}, GREEN
+                );
+                DrawLine3D(
+                    (Vector3){0.0f, 0.0f, -d},
+                    (Vector3){0.0f, 0.0f, d},
+                    DARKBLUE
+                );
+            }
+            EndMode3D();
+        }
     }
     EndTextureMode();
 }
@@ -239,6 +275,37 @@ void update_camera_shell(CameraShell* camera_shell) {
     );
 }
 
+void update_orbital_camera(Camera3D* camera) {
+    static float rot_speed = 0.003f;
+    static float move_speed = 0.01f;
+    static float zoom_speed = 1.0f;
+
+    bool is_mmb_down = IsMouseButtonDown(2);
+    bool is_shift_down = IsKeyDown(KEY_LEFT_SHIFT);
+    Vector2 mouse_delta = GetMouseDelta();
+
+    // Shift + MMB + mouse move -> change the camera position in the
+    // right-direction plane
+    if (is_mmb_down && is_shift_down) {
+        CameraMoveRight(camera, -move_speed * mouse_delta.x, true);
+
+        Vector3 right = GetCameraRight(camera);
+        Vector3 up = Vector3CrossProduct(
+            Vector3Subtract(camera->position, camera->target), right
+        );
+        up = Vector3Scale(Vector3Normalize(up), move_speed * mouse_delta.y);
+        camera->position = Vector3Add(camera->position, up);
+        camera->target = Vector3Add(camera->target, up);
+        // Rotate the camera around the look-at point
+    } else if (is_mmb_down) {
+        CameraYaw(camera, -rot_speed * mouse_delta.x, true);
+        CameraPitch(camera, rot_speed * mouse_delta.y, true, true, false);
+    }
+
+    // Bring camera closer (or move away), to the look-at point
+    CameraMoveToTarget(camera, -GetMouseWheelMove() * zoom_speed);
+}
+
 int main(void) {
     // -------------------------------------------------------------------
     // Load window
@@ -265,10 +332,16 @@ int main(void) {
     // -------------------------------------------------------------------
     // Main loop
     while (!WindowShouldClose()) {
+
+        if (IsKeyPressed(KEY_ENTER)) {
+            MODE = MODE == EDITOR_MODE ? GAME_MODE : EDITOR_MODE;
+        }
+
         if (MODE == EDITOR_MODE) {
             rlDisableBackfaceCulling();
 
             update_camera_shell(&GAME_CAMERA_SHELL);
+            update_orbital_camera(&EDITOR_CAMERA);
 
             // Draw scene
             draw_scene(FULL_SCREEN, DARKGRAY, EDITOR_CAMERA, false, true);
