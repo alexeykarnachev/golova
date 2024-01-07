@@ -4,3 +4,4 @@ lib
 bin/*
 !bin/*.c
 imgui.ini
+*.png
