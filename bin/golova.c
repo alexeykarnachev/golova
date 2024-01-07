@@ -80,13 +80,7 @@ static void load_imgui(void) {
     igStyleColorsDark(NULL);
 }
 
-static void draw_scene(
-    int screen_id, int camera_id, Color clear_color, bool is_picking
-) {
-    BeginTextureMode(*get_screen(screen_id));
-    ClearBackground(clear_color);
-    BeginMode3D(*get_camera(camera_id));
-
+static void draw_scene(bool is_picking) {
     for (size_t id = 0; id < SCENE.entity.n_entities; ++id) {
         bool is_mesh = check_if_entity_has_component(id, MESH_COMPONENT);
         bool is_no_draw = check_if_entity_has_component(id, NO_DRAW_COMPONENT);
@@ -111,60 +105,53 @@ static void draw_scene(
         }
         rlPopMatrix();
     }
-
-    EndMode3D();
-    EndTextureMode();
 }
 
-static void draw_game_camera_ray(int screen_id, int camera_id) {
-    BeginTextureMode(*get_screen(screen_id));
-    BeginMode3D(*get_camera(camera_id));
-
-    rlSetLineWidth(4.0);
+static void draw_game_camera_ray(void) {
     Camera3D* camera = get_camera(GAME_CAMERA);
     Vector3 start = camera->position;
     Vector3 target = camera->target;
     Vector3 dir = Vector3Normalize(Vector3Subtract(target, start));
     Vector3 end = Vector3Add(start, Vector3Scale(dir, 1.0));
     DrawLine3D(start, end, PINK);
-
-    EndMode3D();
-    EndTextureMode();
 }
 
-static void draw_editor_grid(int screen_id, int camera_id) {
-    BeginTextureMode(*get_screen(screen_id));
-    BeginMode3D(*get_camera(camera_id));
-
-    rlSetLineWidth(1.0);
+static void draw_editor_grid(void) {
     DrawGrid(10.0, 5.0);
     float d = 25.0f;
 
-    rlSetLineWidth(2.0);
     DrawLine3D((Vector3){-d, 0.0f, 0.0f}, (Vector3){d, 0.0f, 0.0f}, RED);
     DrawLine3D((Vector3){0.0f, -d, 0.0f}, (Vector3){0.0f, d, 0.0f}, GREEN);
     DrawLine3D((Vector3){0.0f, 0.0f, -d}, (Vector3){0.0f, 0.0f, d}, DARKBLUE);
-
-    EndMode3D();
-    EndTextureMode();
 }
 
-static void draw_items(int screen_id, int camera_id, bool is_picking) {
+static void draw_items(int is_picking) {
     Material material = *get_entity_material(ITEM);
     Mesh mesh = *get_entity_mesh(ITEM);
     Transform transform = *get_entity_transform(GROUND);
     transform.scale = Vector3Scale(Vector3One(), transform.scale.x);
 
-    BeginTextureMode(*get_screen(screen_id));
-    BeginMode3D(*get_camera(camera_id));
+    int atlas_grid_size[2] = {8, 8};
+    SetShaderValue(
+        material.shader,
+        GetShaderLocation(material.shader, "atlas_grid_size"),
+        atlas_grid_size,
+        SHADER_UNIFORM_IVEC2
+    );
+    SetShaderValue(
+        material.shader,
+        GetShaderLocation(material.shader, "is_picking"),
+        &is_picking,
+        SHADER_UNIFORM_INT
+    );
 
-    int item_idx = 0;
+    int item_id = 0;
     size_t n_rows = ITEMS_GRID.grid_dimension[0];
     size_t n_cols = ITEMS_GRID.grid_dimension[1];
     for (size_t i = 0; i < n_rows; ++i) {
         float z = (float)i / (ITEMS_GRID.grid_dimension[0] - 1) - 0.5;
 
-        for (size_t j = 0; j < n_cols; ++j, ++item_idx) {
+        for (size_t j = 0; j < n_cols; ++j, ++item_id) {
             float x = (float)j / (ITEMS_GRID.grid_dimension[1] - 1) - 0.5;
 
             rlPushMatrix();
@@ -183,20 +170,12 @@ static void draw_items(int screen_id, int camera_id, bool is_picking) {
                 ITEMS_GRID.item_scale
             );
             rlTranslatef(0.0, ITEMS_GRID.item_elevation, 0.0);
-
             rlRotatef(90.0, 1.0, 0.0, 0.0);
 
-            int atlas_grid_size[2] = {8, 8};
             SetShaderValue(
                 material.shader,
-                GetShaderLocation(material.shader, "atlas_grid_size"),
-                atlas_grid_size,
-                SHADER_UNIFORM_IVEC2
-            );
-            SetShaderValue(
-                material.shader,
-                GetShaderLocation(material.shader, "item_idx"),
-                &item_idx,
+                GetShaderLocation(material.shader, "item_id"),
+                &item_id,
                 SHADER_UNIFORM_INT
             );
 
@@ -205,9 +184,6 @@ static void draw_items(int screen_id, int camera_id, bool is_picking) {
             rlPopMatrix();
         }
     }
-
-    EndMode3D();
-    EndTextureMode();
 }
 
 static void draw_imgui(void) {
@@ -511,6 +487,9 @@ int main(void) {
     RenderTexture preview_screen = *get_screen(PREVIEW_SCREEN);
     RenderTexture picking_screen = *get_screen(PICKING_SCREEN);
 
+    Camera3D *editor_camera = get_camera(EDITOR_CAMERA);
+    Camera3D *game_camera = get_camera(GAME_CAMERA);
+
     while (!WindowShouldClose()) {
         bool is_enter_pressed = IsKeyPressed(KEY_ENTER) && !IS_IMGUI_INTERACTED;
         bool is_lmb_released = IsMouseButtonReleased(0) && !IS_IMGUI_INTERACTED;
@@ -529,20 +508,60 @@ int main(void) {
 
             // Draw editor full screen
             rlDisableBackfaceCulling();
-            draw_scene(FULL_SCREEN, EDITOR_CAMERA, DARKGRAY, false);
-            draw_items(FULL_SCREEN, EDITOR_CAMERA, false);
-            draw_editor_grid(FULL_SCREEN, EDITOR_CAMERA);
-            draw_game_camera_ray(FULL_SCREEN, EDITOR_CAMERA);
+            BeginTextureMode(full_screen);
+            ClearBackground(DARKGRAY);
+            {
+
+                BeginMode3D(*editor_camera);
+                {
+                    draw_scene(false);
+                    draw_items(false);
+                }
+                EndMode3D();
+
+                rlSetLineWidth(2.0);
+                BeginMode3D(*editor_camera);
+                {
+                    draw_editor_grid();
+                    //
+                }
+                EndMode3D();
+
+                rlSetLineWidth(4.0);
+                BeginMode3D(*editor_camera);
+                {
+                    draw_game_camera_ray();
+                    //
+                }
+                EndMode3D();
+            }
+            EndTextureMode();
 
             // Draw game preview screen
             rlEnableBackfaceCulling();
-            draw_scene(PREVIEW_SCREEN, GAME_CAMERA, BLACK, false);
-            draw_items(PREVIEW_SCREEN, GAME_CAMERA, false);
+            BeginTextureMode(preview_screen);
+            ClearBackground(BLACK);
+            BeginMode3D(*game_camera);
+            {
+                draw_scene(false);
+                draw_items(false);
+            }
+            EndMode3D();
+            EndTextureMode();
 
             // Update picked id
             int picked_id = PICKED_ID;
             if (is_lmb_released && GIZMO.state == RGIZMO_STATE_COLD) {
-                draw_scene(PICKING_SCREEN, EDITOR_CAMERA, BLANK, true);
+                rlDisableBackfaceCulling();
+                BeginTextureMode(picking_screen);
+                ClearBackground(BLANK);
+                BeginMode3D(*editor_camera);
+                {
+                    draw_scene(true);
+                    //
+                }
+                EndMode3D();
+                EndTextureMode();
                 picked_id = get_entity_id_under_cursor();
             }
 
@@ -588,10 +607,31 @@ int main(void) {
             }
             EndDrawing();
         } else if (MODE == GAME_MODE) {
+            // Draw item ids on the picking screen
             rlEnableBackfaceCulling();
-            draw_scene(FULL_SCREEN, GAME_CAMERA, BLACK, false);
-            draw_items(FULL_SCREEN, GAME_CAMERA, false);
-            // draw_scene(PICKING_SCREEN, BLANK, GAME_CAMERA, true);
+            BeginTextureMode(picking_screen);
+            ClearBackground(BLANK);
+            BeginMode3D(*game_camera);
+            {
+                draw_items(true);
+                //
+            }
+            EndMode3D();
+            EndTextureMode();
+
+            int picked_item_id = get_entity_id_under_cursor();
+            printf("%d\n", picked_item_id);
+
+            // Draw final game scene
+            BeginTextureMode(full_screen);
+            ClearBackground(BLACK);
+            BeginMode3D(*game_camera);
+            {
+                draw_scene(false);
+                draw_items(false);
+            }
+            EndMode3D();
+            EndTextureMode();
 
             // Blit screens
             BeginDrawing();
