@@ -31,10 +31,10 @@ typedef enum Mode {
 
 Mode MODE;
 
-int SCREEN_WIDTH = 1024;
-int SCREEN_HEIGHT = 768;
-// int SCREEN_WIDTH = 2560;
-// int SCREEN_HEIGHT = 1440;
+// int SCREEN_WIDTH = 1024;
+// int SCREEN_HEIGHT = 768;
+int SCREEN_WIDTH = 2560;
+int SCREEN_HEIGHT = 1440;
 
 int PICKING_MATERIAL;
 int PLANE_MESH;
@@ -125,62 +125,60 @@ static void draw_editor_grid(void) {
     DrawLine3D((Vector3){0.0f, 0.0f, -d}, (Vector3){0.0f, 0.0f, d}, DARKBLUE);
 }
 
-static void draw_items(int is_picking) {
-    Material material = *get_entity_material(ITEM);
+static void draw_items(bool is_picking) {
     Mesh mesh = *get_entity_mesh(ITEM);
     Transform transform = *get_entity_transform(GROUND);
     transform.scale = Vector3Scale(Vector3One(), transform.scale.x);
 
-    int atlas_grid_size[2] = {8, 8};
-    SetShaderValue(
-        material.shader,
-        GetShaderLocation(material.shader, "atlas_grid_size"),
-        atlas_grid_size,
-        SHADER_UNIFORM_IVEC2
-    );
-    SetShaderValue(
-        material.shader,
-        GetShaderLocation(material.shader, "is_picking"),
-        &is_picking,
-        SHADER_UNIFORM_INT
-    );
-
-    int item_id = 0;
+    int id = 0;
     size_t n_rows = ITEMS_GRID.grid_dimension[0];
     size_t n_cols = ITEMS_GRID.grid_dimension[1];
     for (size_t i = 0; i < n_rows; ++i) {
         float z = (float)i / (ITEMS_GRID.grid_dimension[0] - 1) - 0.5;
 
-        for (size_t j = 0; j < n_cols; ++j, ++item_id) {
+        for (size_t j = 0; j < n_cols; ++j, ++id) {
+            Material material;
+            if (is_picking) {
+                material = *get_material(PICKING_MATERIAL);
+                material.maps[0].color = (Color){id, 0, 0, 255};
+            } else {
+                material = *get_entity_material(ITEM);
+
+                int atlas_grid_size[2] = {8, 8};
+                SetShaderValue(
+                    material.shader,
+                    GetShaderLocation(material.shader, "atlas_grid_size"),
+                    atlas_grid_size,
+                    SHADER_UNIFORM_IVEC2
+                );
+                SetShaderValue(
+                    material.shader,
+                    GetShaderLocation(material.shader, "item_id"),
+                    &id,
+                    SHADER_UNIFORM_INT
+                );
+            }
+
             float x = (float)j / (ITEMS_GRID.grid_dimension[1] - 1) - 0.5;
-
             rlPushMatrix();
+            {
+                rl_transform(transform);
+                rlScalef(
+                    ITEMS_GRID.grid_scale,
+                    ITEMS_GRID.grid_scale,
+                    ITEMS_GRID.grid_scale
+                );
+                rlTranslatef(x, 0.0, z);
+                rlScalef(
+                    ITEMS_GRID.item_scale,
+                    ITEMS_GRID.item_scale,
+                    ITEMS_GRID.item_scale
+                );
+                rlTranslatef(0.0, ITEMS_GRID.item_elevation, 0.0);
+                rlRotatef(90.0, 1.0, 0.0, 0.0);
 
-            rl_transform(transform);
-
-            rlScalef(
-                ITEMS_GRID.grid_scale,
-                ITEMS_GRID.grid_scale,
-                ITEMS_GRID.grid_scale
-            );
-            rlTranslatef(x, 0.0, z);
-            rlScalef(
-                ITEMS_GRID.item_scale,
-                ITEMS_GRID.item_scale,
-                ITEMS_GRID.item_scale
-            );
-            rlTranslatef(0.0, ITEMS_GRID.item_elevation, 0.0);
-            rlRotatef(90.0, 1.0, 0.0, 0.0);
-
-            SetShaderValue(
-                material.shader,
-                GetShaderLocation(material.shader, "item_id"),
-                &item_id,
-                SHADER_UNIFORM_INT
-            );
-
-            DrawMesh(mesh, material, MatrixIdentity());
-
+                DrawMesh(mesh, material, MatrixIdentity());
+            }
             rlPopMatrix();
         }
     }
@@ -487,8 +485,8 @@ int main(void) {
     RenderTexture preview_screen = *get_screen(PREVIEW_SCREEN);
     RenderTexture picking_screen = *get_screen(PICKING_SCREEN);
 
-    Camera3D *editor_camera = get_camera(EDITOR_CAMERA);
-    Camera3D *game_camera = get_camera(GAME_CAMERA);
+    Camera3D* editor_camera = get_camera(EDITOR_CAMERA);
+    Camera3D* game_camera = get_camera(GAME_CAMERA);
 
     while (!WindowShouldClose()) {
         bool is_enter_pressed = IsKeyPressed(KEY_ENTER) && !IS_IMGUI_INTERACTED;
