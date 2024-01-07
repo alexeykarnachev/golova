@@ -14,7 +14,8 @@ LIB_DIR=$(THIS_DIR)/lib
 PROJ_SRCS = $(shell find $(SRC_DIR) -type f -name '*.c')
 PROJ_OBJS = $(patsubst %.c,%.o,$(PROJ_SRCS))
 BIN_NAMES = \
-	golova
+	golova \
+	items_grid_editor
 
 # ------------------------------------------------------------------------
 # Raylib
@@ -39,6 +40,15 @@ RAYGIZMO_SRC_DIR=$(RAYGIZMO_DIR)/include
 # Cimgui
 CIMGUI_NAME=cimgui
 CIMGUI_DIR=$(DEPS_DIR)/$(CIMGUI_NAME)
+
+# ------------------------------------------------------------------------
+# Native File Dialog
+NFD_VERSION=1.1.1
+NFD_URL=https://github.com/btzy/nativefiledialog-extended/archive/refs/tags/v$(NFD_VERSION).tar.gz
+NFD_NAME=nativefiledialog-extended-$(NFD_VERSION)
+NFD_DIR=$(DEPS_DIR)/$(NFD_NAME)
+NFD_ARCHIVE_PATH=$(DEPS_DIR)/v$(NFD_VERSION).tar.gz
+NFD_SRC_DIR=$(NFD_DIR)/src
 
 # ------------------------------------------------------------------------
 # Project
@@ -75,6 +85,12 @@ download_cimgui:
 		git clone --recursive https://github.com/cimgui/cimgui.git $(CIMGUI_DIR); \
 	fi
 
+download_nfd:
+	if [ ! -d $(NFD_DIR) ]; then \
+		wget $(NFD_URL) -O $(NFD_ARCHIVE_PATH); \
+		tar zxvf $(NFD_ARCHIVE_PATH) -C $(DEPS_DIR); \
+	fi
+
 install_raylib:
 	cd $(RAYLIB_SRC_DIR) \
 	&& make PLATFORM=$(RAYLIB_PLATFORM) \
@@ -94,13 +110,24 @@ install_cimgui:
 	&& cp $(CIMGUI_DIR)/cimgui.h $(INCLUDE_DIR) \
 	&& cp $(CIMGUI_DIR)/generator/output/cimgui_impl.h $(INCLUDE_DIR); \
 
+install_nfd:
+	cd $(NFD_DIR) \
+	&& mkdir -p build \
+	&& cd build \
+	&& cmake -DCMAKE_BUILD_TYPE=Release .. \
+	&& cmake --build . \
+	&& cp ./src/libnfd.a $(LIB_DIR) \
+	&& cp ../src/include/nfd.h $(INCLUDE_DIR); \
+
 deps: \
 	create_dirs \
 	download_raylib \
 	download_raygizmo \
 	download_cimgui \
+	download_nfd \
 	install_raylib \
 	install_raygizmo \
-	install_cimgui
+	install_cimgui \
+	install_nfd
 	rm -f $(DEPS_DIR)/*.tar.gz;
 
