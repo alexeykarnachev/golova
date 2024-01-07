@@ -2,7 +2,10 @@
 
 CC=gcc
 CFLAGS=-Wall -std=c99 -Wno-missing-braces -Wunused-result -I./include
-LDFLAGS=-L./lib -lraylib -lcimgui -lm -lpthread -ldl -lGL -lstdc++
+LDFLAGS=\
+	-L./lib -lraylib -lm -lpthread -ldl -lGL -lstdc++ \
+	-lcimgui -lnfd \
+	$(shell pkg-config --libs gtk+-3.0)
 
 THIS_DIR=$(shell pwd)
 BIN_DIR=$(THIS_DIR)/bin
@@ -117,7 +120,7 @@ install_nfd:
 	&& cmake -DCMAKE_BUILD_TYPE=Release .. \
 	&& cmake --build . \
 	&& cp ./src/libnfd.a $(LIB_DIR) \
-	&& cp ../src/include/nfd.h $(INCLUDE_DIR); \
+	&& cp ../src/include/* $(INCLUDE_DIR); \
 
 deps: \
 	create_dirs \

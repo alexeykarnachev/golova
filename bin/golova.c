@@ -1,3 +1,5 @@
+#include "../src/cimgui_utils.h"
+#include "../src/scene.h"
 #include "raylib.h"
 #include "raymath.h"
 #include "rcamera.h"
@@ -10,12 +12,7 @@
 #include "raygizmo.h"
 
 #define CIMGUI_DEFINE_ENUMS_AND_STRUCTS
-#define CIMGUI_USE_GLFW
-#define CIMGUI_USE_OPENGL3
-#include "../src/scene.h"
 #include "cimgui.h"
-#include "cimgui_impl.h"
-#include <GLFW/glfw3.h>
 
 typedef struct ItemsGrid {
     int grid_dimension[2];
@@ -69,15 +66,6 @@ static void rl_transform(Transform transform) {
     rlTranslatef(t.x, t.y, t.z);
     rlRotatef(angle * RAD2DEG, axis.x, axis.y, axis.z);
     rlScalef(s.x, s.y, s.z);
-}
-
-static void load_imgui(void) {
-    igCreateContext(NULL);
-    GLFWwindow* window = (GLFWwindow*)GetWindowHandle();
-    glfwGetWindowUserPointer(window);
-    ImGui_ImplGlfw_InitForOpenGL(window, true);
-    ImGui_ImplOpenGL3_Init("#version 330");
-    igStyleColorsDark(NULL);
 }
 
 static void draw_scene(bool is_picking) {
@@ -185,23 +173,14 @@ static void draw_items(bool is_picking) {
 }
 
 static void draw_imgui(void) {
-    ImGui_ImplOpenGL3_NewFrame();
-    ImGui_ImplGlfw_NewFrame();
-    igNewFrame();
-
     ImGuiIO* io = igGetIO();
     IS_IMGUI_INTERACTED = io->WantCaptureMouse || io->WantCaptureKeyboard;
 
-    // Place next window on top left
-    ImVec2 position = {0.0, 0.0};
-    igSetNextWindowPos(position, ImGuiCond_Always, (ImVec2){0.0, 0.0});
-    igSetNextWindowSize((ImVec2){0.0, 0.0}, ImGuiCond_Always);
-
+    ig_fix_window_top_left();
     // Draw inspector
     if (igBegin("Inspector", NULL, 0)) {
-        int tree_node_open = ImGuiTreeNodeFlags_DefaultOpen;
         // Draw camera inspector
-        if (igCollapsingHeader_TreeNodeFlags("Camera", tree_node_open)) {
+        if (ig_collapsing_header("Camera", true)) {
             igPushItemWidth(150.0);
             igDragFloat(
                 "FOV",
@@ -215,7 +194,7 @@ static void draw_imgui(void) {
             igPopItemWidth();
         }
 
-        if (igCollapsingHeader_TreeNodeFlags("Ground", tree_node_open)) {
+        if (ig_collapsing_header("Ground", true)) {
             igPushItemWidth(150.0);
 
             igSeparatorText("Grid");
@@ -255,8 +234,7 @@ static void draw_imgui(void) {
         }
 
         // Draw picked model transform inspector
-        if (igCollapsingHeader_TreeNodeFlags("Transform", tree_node_open)
-            && PICKED_ID != -1) {
+        if (ig_collapsing_header("Transform", true)) {
             Transform* t = get_entity_transform(PICKED_ID);
             igDragFloat3(
                 "Scale", (float*)&t->scale, 0.1, 0.1, 100.0, "%.1f", 0
@@ -278,9 +256,6 @@ static void draw_imgui(void) {
         }
     }
     igEnd();
-
-    igRender();
-    ImGui_ImplOpenGL3_RenderDrawData(igGetDrawData());
 }
 
 static void blit_screen(RenderTexture screen, Vector2 position) {
@@ -590,7 +565,9 @@ int main(void) {
             }
 
             BeginTextureMode(full_screen);
+            begin_imgui();
             draw_imgui();
+            end_imgui();
             EndTextureMode();
 
             // Blit screens
