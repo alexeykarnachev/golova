@@ -161,7 +161,7 @@ static void load_ground(void) {
 
     // Item
     GROUND.item.scale = 0.1;
-    GROUND.item.elevation = 0.0;
+    GROUND.item.elevation = 0.5;
 }
 
 static void load_game_camera(void) {
@@ -299,8 +299,9 @@ static void draw_items(RenderTexture screen, Camera3D camera, bool is_picking) {
             rl_transform(transform);
 
             rlScalef(GROUND.grid.scale, GROUND.grid.scale, GROUND.grid.scale);
-            rlTranslatef(x, GROUND.item.elevation, z);
+            rlTranslatef(x, 0.0, z);
             rlScalef(GROUND.item.scale, GROUND.item.scale, GROUND.item.scale);
+            rlTranslatef(0.0, GROUND.item.elevation, 0.0);
 
             rlRotatef(90.0, 1.0, 0.0, 0.0);
 
@@ -368,7 +369,7 @@ static void draw_imgui(void) {
                 &GROUND.item.elevation,
                 0.01,
                 0.01,
-                1.0,
+                2.0,
                 "%.3f",
                 0
             );
