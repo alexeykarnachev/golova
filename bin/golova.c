@@ -408,6 +408,7 @@ void load_scene(const char *file_path) {
     SceneSaveData data = *(SceneSaveData*)LoadFileData(file_path, &data_size);
     memcpy(SCENE.entity.transform, data.entity.transform, sizeof(SCENE.entity.transform));
     memcpy(SCENE.camera, data.camera, sizeof(SCENE.camera));
+
     ITEMS_GRID = data.items_grid;
 
     TraceLog(LOG_INFO, "Scene data loaded: %s", file_path);
@@ -443,6 +444,7 @@ int main(void) {
     Material material = LoadMaterialDefault();
     material.shader = LoadShader(0, "resources/shaders/sprite.frag");
     material.maps[0].texture = LoadTexture("resources/textures/golova.png");
+    SetTextureFilter(material.maps[0].texture, TEXTURE_FILTER_BILINEAR);
 
     float aspect = (float)material.maps[0].texture.width
                    / material.maps[0].texture.height;
@@ -464,6 +466,7 @@ int main(void) {
     material = LoadMaterialDefault();
     material.shader = LoadShader(0, "resources/shaders/item.frag");
     material.maps[0].texture = LoadTexture("resources/textures/items_0.png");
+    SetTextureFilter(material.maps[0].texture, TEXTURE_FILTER_BILINEAR);
 
     ITEM = create_entity();
     set_entity_component(ITEM, NO_DRAW_COMPONENT);
