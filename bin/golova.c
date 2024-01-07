@@ -393,9 +393,13 @@ typedef struct SceneSaveData {
     ItemsGrid items_grid;
 } SceneSaveData;
 
-void save_scene(const char *file_path) {
+void save_scene(const char* file_path) {
     SceneSaveData data;
-    memcpy(data.entity.transform, SCENE.entity.transform, sizeof(SCENE.entity.transform));
+    memcpy(
+        data.entity.transform,
+        SCENE.entity.transform,
+        sizeof(SCENE.entity.transform)
+    );
     memcpy(data.camera, SCENE.camera, sizeof(SCENE.camera));
     data.items_grid = ITEMS_GRID;
 
@@ -403,10 +407,14 @@ void save_scene(const char *file_path) {
     TraceLog(LOG_INFO, "Scene data saved: %s", file_path);
 }
 
-void load_scene(const char *file_path) {
+void load_scene(const char* file_path) {
     int data_size;
     SceneSaveData data = *(SceneSaveData*)LoadFileData(file_path, &data_size);
-    memcpy(SCENE.entity.transform, data.entity.transform, sizeof(SCENE.entity.transform));
+    memcpy(
+        SCENE.entity.transform,
+        data.entity.transform,
+        sizeof(SCENE.entity.transform)
+    );
     memcpy(SCENE.camera, data.camera, sizeof(SCENE.camera));
 
     ITEMS_GRID = data.items_grid;
