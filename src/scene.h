@@ -28,19 +28,18 @@ typedef struct Scene {
     } entity;
 
     int n_cameras;
-    Camera camera[MAX_N_CAMERAS];
+    Camera3D camera[MAX_N_CAMERAS];
 } Scene;
 
 typedef enum Component {
     MESH_COMPONENT = 1 << 0,
     MATERIAL_COMPONENT = 1 << 1,
-    CAMERA_SHELL_COMPONENT = 1 << 2,
     NO_DRAW_COMPONENT = 1 << 3,
 } Component;
 
 extern Scene SCENE;
 
-void load_scene(void);
+void create_scene(void);
 
 int create_screen(RenderTexture screen);
 int create_material(Material material);
@@ -48,18 +47,22 @@ int create_mesh(Mesh mesh);
 int create_entity(void);
 int create_camera(void);
 
-RenderTexture get_screen(int screen_id);
-Transform get_transform(int entity_id);
-Mesh get_mesh(int entity_id);
-Material get_material(int entity_id);
+RenderTexture* get_screen(int screen_id);
+Camera3D* get_camera(int camera_id);
+Mesh* get_mesh(int mesh_id);
+Material* get_material(int material_id);
 
-void attach_mesh(int entity_id, int mesh_id);
-void attach_material(int entity_id, int material_id);
+Transform* get_entity_transform(int entity_id);
+Mesh* get_entity_mesh(int entity_id);
+Material* get_entity_material(int entity_id);
 
-void set_component(int entity_id, Component component);
-bool check_if_has_component(int entity_id, Component component);
+void attach_entity_mesh(int entity_id, int mesh_id);
+void attach_entity_material(int entity_id, int material_id);
 
-void set_scale(int entity_id, Vector3 scale);
-void set_scalef(int entity_id, float scale);
+void set_entity_component(int entity_id, Component component);
+void set_entity_scale(int entity_id, Vector3 scale);
+void set_entity_scalef(int entity_id, float scale);
+
+bool check_if_entity_has_component(int entity_id, Component component);
 
 void unload_scene(void);
