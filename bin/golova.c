@@ -1,3 +1,4 @@
+#include "../src/boards.h"
 #include "../src/cimgui_utils.h"
 #include "../src/scene.h"
 #include "raylib.h"
@@ -379,6 +380,9 @@ int main(void) {
 
     // -------------------------------------------------------------------
     // Load common resources
+    load_boards("resources/boards");
+    return 0;
+
     create_scene();
     load_imgui();
 
