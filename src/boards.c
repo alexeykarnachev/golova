@@ -7,7 +7,8 @@
 #include <stdlib.h>
 #include <string.h>
 
-int N_BOARDS = 0;
+int N_BOARDS;
+int BOARD_ID;
 Board BOARDS[MAX_N_BOARDS];
 
 static bool read_int(const char* data, int* dst, size_t* p) {
@@ -18,7 +19,7 @@ static bool read_int(const char* data, int* dst, size_t* p) {
     return true;
 }
 
-void load_boards(char* file_path) {
+void preload_boards(char* file_path) {
     long n_bytes;
     char* data = read_cstr_file(file_path, "rb", &n_bytes);
     size_t p = 0;
@@ -52,12 +53,49 @@ void load_boards(char* file_path) {
         if (data[p] != 0x1E) goto fail;
         p += 1;
 
+        board.board_scale = 0.7;
+        board.item_scale = 0.1;
+        board.item_elevation = 0.5;
+        BOARDS[N_BOARDS] = board;
+
         N_BOARDS += 1;
     }
 
+    load_board(0);
     return;
-
 fail:
     TraceLog(LOG_ERROR, "Failed to parse board %d", N_BOARDS);
     exit(1);
+}
+
+void load_board(int board_id) {
+    if (board_id == BOARD_ID) {
+        TraceLog(LOG_WARNING, "Board %d is already loaded", board_id);
+    }
+
+    CHECK_ID_INBOUND(board_id, N_BOARDS, board);
+    unload_board();
+
+    BOARD_ID = board_id;
+    Board* board = &BOARDS[board_id];
+
+    static char file_path[1024];
+    for (size_t i = 0; i < board->n_items; ++i) {
+        sprintf(
+            file_path, "resources/items/sprites/%s.png", board->items[i].name
+        );
+        Image image = LoadImage(file_path);
+        board->items[i].texture = LoadTextureFromImage(image);
+        UnloadImage(image);
+    }
+}
+
+void unload_board(void) {
+    Board* board = &BOARDS[BOARD_ID];
+    for (size_t i = 0; i < board->n_items; ++i) {
+        Texture2D texture = board->items[i].texture;
+        if (IsTextureReady(texture)) {
+            UnloadTexture(texture);
+        }
+    }
 }

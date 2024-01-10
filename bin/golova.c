@@ -5,6 +5,7 @@
 #include "raymath.h"
 #include "rcamera.h"
 #include "rlgl.h"
+#include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -14,13 +15,6 @@
 
 #define CIMGUI_DEFINE_ENUMS_AND_STRUCTS
 #include "cimgui.h"
-
-typedef struct ItemsGrid {
-    int grid_dimension[2];
-    float grid_scale;
-    float item_scale;
-    float item_elevation;
-} ItemsGrid;
 
 typedef enum Mode {
     EDITOR_MODE,
@@ -48,8 +42,6 @@ int GAME_CAMERA_SHELL;
 int GOLOVA;
 int GROUND;
 int ITEM;
-
-ItemsGrid ITEMS_GRID;
 
 RGizmo GIZMO;
 
@@ -119,11 +111,13 @@ static void draw_items(bool is_picking) {
     Transform transform = *get_entity_transform(GROUND);
     transform.scale = Vector3Scale(Vector3One(), transform.scale.x);
 
+    Board* board = &BOARDS[BOARD_ID];
+    int n_rows = sqrt(board->n_items);
+    int n_cols = n_rows;
+
     int id = 0;
-    size_t n_rows = ITEMS_GRID.grid_dimension[0];
-    size_t n_cols = ITEMS_GRID.grid_dimension[1];
     for (size_t i = 0; i < n_rows; ++i) {
-        float z = (float)i / (ITEMS_GRID.grid_dimension[0] - 1) - 0.5;
+        float z = (float)i / (n_rows - 1) - 0.5;
 
         for (size_t j = 0; j < n_cols; ++j, ++id) {
             Material material;
@@ -132,38 +126,21 @@ static void draw_items(bool is_picking) {
                 material.maps[0].color = (Color){id, 0, 0, 255};
             } else {
                 material = *get_entity_material(ITEM);
-
-                int atlas_grid_size[2] = {8, 8};
-                SetShaderValue(
-                    material.shader,
-                    GetShaderLocation(material.shader, "atlas_grid_size"),
-                    atlas_grid_size,
-                    SHADER_UNIFORM_IVEC2
-                );
-                SetShaderValue(
-                    material.shader,
-                    GetShaderLocation(material.shader, "item_id"),
-                    &id,
-                    SHADER_UNIFORM_INT
-                );
+                material.maps[0].texture = board->items[id].texture;
             }
 
-            float x = (float)j / (ITEMS_GRID.grid_dimension[1] - 1) - 0.5;
+            float x = (float)j / (n_cols - 1) - 0.5;
             rlPushMatrix();
             {
                 rl_transform(transform);
                 rlScalef(
-                    ITEMS_GRID.grid_scale,
-                    ITEMS_GRID.grid_scale,
-                    ITEMS_GRID.grid_scale
+                    board->board_scale, board->board_scale, board->board_scale
                 );
                 rlTranslatef(x, 0.0, z);
                 rlScalef(
-                    ITEMS_GRID.item_scale,
-                    ITEMS_GRID.item_scale,
-                    ITEMS_GRID.item_scale
+                    board->item_scale, board->item_scale, board->item_scale
                 );
-                rlTranslatef(0.0, ITEMS_GRID.item_elevation, 0.0);
+                rlTranslatef(0.0, board->item_elevation, 0.0);
                 rlRotatef(90.0, 1.0, 0.0, 0.0);
 
                 DrawMesh(mesh, material, MatrixIdentity());
@@ -182,7 +159,6 @@ static void draw_imgui(void) {
     if (igBegin("Inspector", NULL, 0)) {
         // Draw camera inspector
         if (ig_collapsing_header("Camera", true)) {
-            igPushItemWidth(150.0);
             igDragFloat(
                 "FOV",
                 &get_camera(GAME_CAMERA)->fovy,
@@ -192,19 +168,26 @@ static void draw_imgui(void) {
                 "%.1f",
                 0
             );
-            igPopItemWidth();
         }
 
         if (ig_collapsing_header("Ground", true)) {
-            igPushItemWidth(150.0);
+            igSeparatorText("Board");
+            if (igBeginListBox("##", (ImVec2){200.0f, 100.0f})) {
 
-            igSeparatorText("Grid");
-            igDragInt2(
-                "Dimension##grid", ITEMS_GRID.grid_dimension, 1, 1, 5, "%d", 0
-            );
+                for (size_t i = 0; i < N_BOARDS; ++i) {
+                    const bool is_selected = (i == BOARD_ID);
+                    bool is_clicked = igSelectable_Bool(
+                        BOARDS[i].rule, is_selected, 0, (ImVec2){0.0f, 0.0f}
+                    );
+                    if (is_clicked) load_board(i);
+                    if (is_selected) igSetItemDefaultFocus();
+                }
+
+                igEndListBox();
+            }
             igDragFloat(
-                "Scale##grid",
-                &ITEMS_GRID.grid_scale,
+                "Scale##board",
+                &BOARDS[BOARD_ID].board_scale,
                 0.01,
                 0.01,
                 1.0,
@@ -214,24 +197,23 @@ static void draw_imgui(void) {
 
             igSeparatorText("Item");
             igDragFloat(
-                "Elevation##item",
-                &ITEMS_GRID.item_elevation,
-                0.01,
-                0.01,
-                2.0,
-                "%.3f",
-                0
-            );
-            igDragFloat(
                 "Scale##item",
-                &ITEMS_GRID.item_scale,
+                &BOARDS[BOARD_ID].item_scale,
                 0.01,
                 0.01,
                 1.0,
                 "%.3f",
                 0
             );
-            igPopItemWidth();
+            igDragFloat(
+                "Elevation##item",
+                &BOARDS[BOARD_ID].item_elevation,
+                0.01,
+                0.01,
+                1.0,
+                "%.3f",
+                0
+            );
         }
 
         // Draw picked model transform inspector
@@ -340,7 +322,6 @@ typedef struct SceneSaveData {
     } entity;
 
     Camera3D camera[MAX_N_CAMERAS];
-    ItemsGrid items_grid;
 } SceneSaveData;
 
 void save_scene(const char* file_path) {
@@ -351,7 +332,6 @@ void save_scene(const char* file_path) {
         sizeof(SCENE.entity.transform)
     );
     memcpy(data.camera, SCENE.camera, sizeof(SCENE.camera));
-    data.items_grid = ITEMS_GRID;
 
     SaveFileData(file_path, &data, sizeof(data));
     TraceLog(LOG_INFO, "Scene data saved: %s", file_path);
@@ -367,8 +347,6 @@ void load_scene(const char* file_path) {
     );
     memcpy(SCENE.camera, data.camera, sizeof(SCENE.camera));
 
-    ITEMS_GRID = data.items_grid;
-
     TraceLog(LOG_INFO, "Scene data loaded: %s", file_path);
 }
 
@@ -380,8 +358,8 @@ int main(void) {
 
     // -------------------------------------------------------------------
     // Load common resources
-    load_boards("resources/boards");
-    return 0;
+    preload_boards("resources/boards");
+    // load_current_board(0);
 
     create_scene();
     load_imgui();
@@ -426,20 +404,12 @@ int main(void) {
     // Item
     material = LoadMaterialDefault();
     material.shader = LoadShader(0, "resources/shaders/item.frag");
-    material.maps[0].texture = LoadTexture("resources/textures/items_0.png");
     SetTextureFilter(material.maps[0].texture, TEXTURE_FILTER_BILINEAR);
 
     ITEM = create_entity();
     set_entity_component(ITEM, NO_DRAW_COMPONENT);
     attach_entity_material(ITEM, create_material(material));
     attach_entity_mesh(ITEM, PLANE_MESH);
-
-    // Items grid
-    ITEMS_GRID.grid_dimension[0] = 4;
-    ITEMS_GRID.grid_dimension[1] = 3;
-    ITEMS_GRID.grid_scale = 0.7;
-    ITEMS_GRID.item_scale = 0.1;
-    ITEMS_GRID.item_elevation = 0.5;
 
     // Cameras
     EDITOR_CAMERA = create_camera();
@@ -623,6 +593,7 @@ int main(void) {
     // Unload the Scene
     rgizmo_unload();
     unload_scene();
+    unload_board();
 
     return 0;
 }
