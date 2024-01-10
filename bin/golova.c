@@ -1,4 +1,3 @@
-#include "../src/boards.h"
 #include "../src/cimgui_utils.h"
 #include "../src/scene.h"
 #include "raylib.h"
@@ -111,7 +110,7 @@ static void draw_items(bool is_picking) {
     Transform transform = *get_entity_transform(GROUND);
     transform.scale = Vector3Scale(Vector3One(), transform.scale.x);
 
-    Board* board = &BOARDS[BOARD_ID];
+    Board* board = get_loaded_board();
     int n_rows = sqrt(board->n_items);
     int n_cols = n_rows;
 
@@ -174,10 +173,13 @@ static void draw_imgui(void) {
             igSeparatorText("Board");
             if (igBeginListBox("##", (ImVec2){200.0f, 100.0f})) {
 
-                for (size_t i = 0; i < N_BOARDS; ++i) {
-                    const bool is_selected = (i == BOARD_ID);
+                for (size_t i = 0; i < SCENE.n_boards; ++i) {
+                    const bool is_selected = (i == SCENE.loaded_board_id);
                     bool is_clicked = igSelectable_Bool(
-                        BOARDS[i].rule, is_selected, 0, (ImVec2){0.0f, 0.0f}
+                        SCENE.board[i].rule,
+                        is_selected,
+                        0,
+                        (ImVec2){0.0f, 0.0f}
                     );
                     if (is_clicked) load_board(i);
                     if (is_selected) igSetItemDefaultFocus();
@@ -187,7 +189,7 @@ static void draw_imgui(void) {
             }
             igDragFloat(
                 "Scale##board",
-                &BOARDS[BOARD_ID].board_scale,
+                &get_loaded_board()->board_scale,
                 0.01,
                 0.01,
                 1.0,
@@ -198,7 +200,7 @@ static void draw_imgui(void) {
             igSeparatorText("Item");
             igDragFloat(
                 "Scale##item",
-                &BOARDS[BOARD_ID].item_scale,
+                &get_loaded_board()->item_scale,
                 0.01,
                 0.01,
                 1.0,
@@ -207,7 +209,7 @@ static void draw_imgui(void) {
             );
             igDragFloat(
                 "Elevation##item",
-                &BOARDS[BOARD_ID].item_elevation,
+                &get_loaded_board()->item_elevation,
                 0.01,
                 0.01,
                 1.0,
@@ -358,9 +360,6 @@ int main(void) {
 
     // -------------------------------------------------------------------
     // Load common resources
-    preload_boards("resources/boards");
-    // load_current_board(0);
-
     create_scene();
     load_imgui();
 
@@ -593,7 +592,6 @@ int main(void) {
     // Unload the Scene
     rgizmo_unload();
     unload_scene();
-    unload_board();
 
     return 0;
 }
