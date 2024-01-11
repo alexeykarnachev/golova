@@ -50,7 +50,8 @@ RGizmo GIZMO;
 Texture NO_ITEM_TEXTURE;
 bool IS_IMGUI_INTERACTED;
 int IG_ID = 0;
-int PICKED_ID = -1;
+int PICKED_ENTITY_ID = -1;
+int PICKED_ITEM_ID = -1;
 
 int N_BOARDS;
 char** BOARD_NAMES;
@@ -224,11 +225,54 @@ static void draw_imgui(void) {
             int n_items = SCENE.board.n_items;
             igInputInt("N items", &n_items, 1, 1, 0);
             if (n_items >= 0) SCENE.board.n_items = n_items;
+            if (PICKED_ITEM_ID >= SCENE.board.n_items) {
+                PICKED_ITEM_ID = SCENE.board.n_items - 1;
+            }
+        }
+
+        // Draw picked item inspector
+        if (ig_collapsing_header("Item", true) && PICKED_ITEM_ID != -1) {
+            Item* item = &SCENE.board.items[PICKED_ITEM_ID];
+            int texture_id;
+            if (item->texture.id == 0) {
+                texture_id = NO_ITEM_TEXTURE.id;
+            } else {
+                texture_id = item->texture.id;
+            }
+
+            bool is_clicked = igImageButton(
+                "##item_texture",
+                (ImTextureID)(long)texture_id,
+                (ImVec2){128.0, 128.0},
+                (ImVec2){0.0, 0.0},
+                (ImVec2){1.0, 1.0},
+                (ImVec4){0.0, 0.0, 0.0, 1.0},
+                (ImVec4){1.0, 1.0, 1.0, 1.0}
+            );
+
+            if (is_clicked) {
+                static nfdfilteritem_t filter[1] = {{"Texture", "png"}};
+                char* fp = open_nfd("resources/items/sprites", filter, 1);
+                if (fp != NULL) {
+                    get_file_name(item->name, fp, true);
+                    if (IsTextureReady(item->texture)) {
+                        UnloadTexture(item->texture);
+                    }
+                    item->texture = LoadTexture(fp);
+                    NFD_FreePathN(fp);
+                }
+            }
+
+            igSameLine(0.0, 5.0);
+            igBeginGroup();
+            igText(item->name[0] == '\0' ? "???" : item->name);
+            igCheckbox("Is correct", &item->is_correct);
+            igEndGroup();
         }
 
         // Draw picked model transform inspector
-        if (ig_collapsing_header("Transform", true)) {
-            Transform* t = get_entity_transform(PICKED_ID);
+        if (ig_collapsing_header("Transform", true) && PICKED_ENTITY_ID != -1) {
+            Transform* t = get_entity_transform(PICKED_ENTITY_ID);
             igDragFloat3(
                 "Scale", (float*)&t->scale, 0.1, 0.1, 100.0, "%.1f", 0
             );
@@ -507,7 +551,7 @@ int main(void) {
             EndTextureMode();
 
             // Update picked id
-            int picked_id = PICKED_ID;
+            int picked_entity_id = PICKED_ENTITY_ID;
             if (is_lmb_released && GIZMO.state == RGIZMO_STATE_COLD) {
                 rlDisableBackfaceCulling();
                 BeginTextureMode(picking_screen);
@@ -515,32 +559,30 @@ int main(void) {
                 BeginMode3D(*editor_camera);
                 {
                     draw_scene(true);
-                    picked_id = get_entity_id_under_cursor();
-                    printf("entity: %d\n", picked_id);
-                    //
+                    picked_entity_id = get_entity_id_under_cursor();
                 }
 
                 ClearBackground(BLANK);
                 BeginMode3D(*editor_camera);
                 {
                     draw_items(true);
-                    int foo = get_entity_id_under_cursor();
-                    printf("item: %d\n", foo);
-                    //
+                    PICKED_ITEM_ID = get_entity_id_under_cursor();
                 }
                 EndMode3D();
                 EndTextureMode();
+
+                if (PICKED_ITEM_ID != -1) picked_entity_id = -1;
             }
 
-            if (picked_id == -1 && GIZMO.state == RGIZMO_STATE_COLD) {
-                PICKED_ID = -1;
-            } else if (picked_id != -1) {
-                PICKED_ID = picked_id;
+            if (picked_entity_id == -1 && GIZMO.state == RGIZMO_STATE_COLD) {
+                PICKED_ENTITY_ID = -1;
+            } else if (picked_entity_id != -1) {
+                PICKED_ENTITY_ID = picked_entity_id;
             }
 
             // Update, apply and draw gizmo
-            if (PICKED_ID != -1) {
-                Transform* t = get_entity_transform(PICKED_ID);
+            if (PICKED_ENTITY_ID != -1) {
+                Transform* t = get_entity_transform(PICKED_ENTITY_ID);
                 rgizmo_update(
                     &GIZMO, SCENE.camera[EDITOR_CAMERA], t->translation
                 );
