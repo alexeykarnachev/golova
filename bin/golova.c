@@ -1,6 +1,8 @@
 #include "../src/cimgui_utils.h"
+#include "../src/nfd_utils.h"
 #include "../src/scene.h"
 #include "../src/utils.h"
+#include "nfd.h"
 #include "raylib.h"
 #include "raymath.h"
 #include "rcamera.h"
@@ -23,10 +25,10 @@ typedef enum Mode {
 
 Mode MODE;
 
-// int SCREEN_WIDTH = 1024;
-// int SCREEN_HEIGHT = 768;
-int SCREEN_WIDTH = 2560;
-int SCREEN_HEIGHT = 1440;
+int SCREEN_WIDTH = 1024;
+int SCREEN_HEIGHT = 768;
+// int SCREEN_WIDTH = 2560;
+// int SCREEN_HEIGHT = 1440;
 
 int PICKING_MATERIAL;
 int PLANE_MESH;
@@ -45,11 +47,13 @@ int ITEM;
 
 RGizmo GIZMO;
 
+Texture NO_ITEM_TEXTURE;
 bool IS_IMGUI_INTERACTED;
+int IG_ID = 0;
 int PICKED_ID = -1;
 
 int N_BOARDS;
-char **BOARD_NAMES;
+char** BOARD_NAMES;
 
 static void rl_transform(Transform transform) {
     Vector3 axis;
@@ -109,51 +113,65 @@ static void draw_editor_grid(void) {
     DrawLine3D((Vector3){0.0f, 0.0f, -d}, (Vector3){0.0f, 0.0f, d}, DARKBLUE);
 }
 
-// static void draw_items(bool is_picking) {
-//     Mesh mesh = *get_entity_mesh(ITEM);
-//     Transform transform = *get_entity_transform(GROUND);
-//     transform.scale = Vector3Scale(Vector3One(), transform.scale.x);
-// 
-//     Board* board = get_loaded_board();
-//     int n_rows = sqrt(board->n_items);
-//     int n_cols = n_rows;
-// 
-//     int id = 0;
-//     for (size_t i = 0; i < n_rows; ++i) {
-//         float z = (float)i / (n_rows - 1) - 0.5;
-// 
-//         for (size_t j = 0; j < n_cols; ++j, ++id) {
-//             Material material;
-//             if (is_picking) {
-//                 material = *get_material(PICKING_MATERIAL);
-//                 material.maps[0].color = (Color){id, 0, 0, 255};
-//             } else {
-//                 material = *get_entity_material(ITEM);
-//                 material.maps[0].texture = board->items[id].texture;
-//             }
-// 
-//             float x = (float)j / (n_cols - 1) - 0.5;
-//             rlPushMatrix();
-//             {
-//                 rl_transform(transform);
-//                 rlScalef(
-//                     board->board_scale, board->board_scale, board->board_scale
-//                 );
-//                 rlTranslatef(x, 0.0, z);
-//                 rlScalef(
-//                     board->item_scale, board->item_scale, board->item_scale
-//                 );
-//                 rlTranslatef(0.0, board->item_elevation, 0.0);
-//                 rlRotatef(90.0, 1.0, 0.0, 0.0);
-// 
-//                 DrawMesh(mesh, material, MatrixIdentity());
-//             }
-//             rlPopMatrix();
-//         }
-//     }
-// }
+static void draw_items(bool is_picking) {
+    if (SCENE.board.n_items == 0) return;
+
+    Mesh mesh = *get_entity_mesh(ITEM);
+    Transform transform = *get_entity_transform(GROUND);
+    transform.scale = Vector3Scale(Vector3One(), transform.scale.x);
+
+    int id = 0;
+    int n_rows = sqrt(SCENE.board.n_items);
+    int n_cols = ceil((float)SCENE.board.n_items / n_rows);
+
+    for (size_t i = 0; i < n_rows; ++i) {
+        float z = n_rows > 1 ? (float)i / (n_rows - 1) - 0.5 : 0.0;
+
+        for (size_t j = 0; j < n_cols; ++j, ++id) {
+            if (id >= SCENE.board.n_items) break;
+
+            float x = n_cols > 1 ? (float)j / (n_cols - 1) - 0.5 : 0.0;
+
+            Item* item = &SCENE.board.items[id];
+            Material material;
+            if (is_picking) {
+                material = *get_material(PICKING_MATERIAL);
+                material.maps[0].color = (Color){id, 0, 0, 255};
+            } else {
+                material = *get_entity_material(ITEM);
+                if (item->texture.id == 0) {
+                    material.maps[0].texture = NO_ITEM_TEXTURE;
+                } else {
+                    material.maps[0].texture = item->texture;
+                }
+            }
+
+            rlPushMatrix();
+            {
+                rl_transform(transform);
+                rlScalef(
+                    SCENE.board.board_scale,
+                    SCENE.board.board_scale,
+                    SCENE.board.board_scale
+                );
+                rlTranslatef(x, 0.0, z);
+                rlScalef(
+                    SCENE.board.item_scale,
+                    SCENE.board.item_scale,
+                    SCENE.board.item_scale
+                );
+                rlTranslatef(0.0, SCENE.board.item_elevation, 0.0);
+                rlRotatef(90.0, 1.0, 0.0, 0.0);
+
+                DrawMesh(mesh, material, MatrixIdentity());
+            }
+            rlPopMatrix();
+        }
+    }
+}
 
 static void draw_imgui(void) {
+    IG_ID = 1;
     ImGuiIO* io = igGetIO();
     IS_IMGUI_INTERACTED = io->WantCaptureMouse || io->WantCaptureKeyboard;
 
@@ -173,54 +191,40 @@ static void draw_imgui(void) {
             );
         }
 
-        // if (ig_collapsing_header("Ground", true)) {
-        //     igSeparatorText("Board");
-        //     if (igBeginListBox("##", (ImVec2){200.0f, 100.0f})) {
+        if (ig_collapsing_header("Board", true)) {
+            igInputText("Rule", SCENE.board.rule, MAX_RULE_LENGTH, 0, 0, NULL);
+            igDragFloat(
+                "Board scale",
+                &SCENE.board.board_scale,
+                0.01,
+                0.01,
+                1.0,
+                "%.3f",
+                0
+            );
+            igDragFloat(
+                "Item Scale",
+                &SCENE.board.item_scale,
+                0.01,
+                0.01,
+                1.0,
+                "%.3f",
+                0
+            );
+            igDragFloat(
+                "Item elevation",
+                &SCENE.board.item_elevation,
+                0.01,
+                0.01,
+                1.0,
+                "%.3f",
+                0
+            );
 
-        //         for (size_t i = 0; i < SCENE.n_boards; ++i) {
-        //             const bool is_selected = (i == SCENE.loaded_board_id);
-        //             bool is_clicked = igSelectable_Bool(
-        //                 SCENE.board[i].rule,
-        //                 is_selected,
-        //                 0,
-        //                 (ImVec2){0.0f, 0.0f}
-        //             );
-        //             if (is_clicked) load_board(i);
-        //             if (is_selected) igSetItemDefaultFocus();
-        //         }
-
-        //         igEndListBox();
-        //     }
-        //     igDragFloat(
-        //         "Scale##board",
-        //         &get_loaded_board()->board_scale,
-        //         0.01,
-        //         0.01,
-        //         1.0,
-        //         "%.3f",
-        //         0
-        //     );
-
-        //     igSeparatorText("Item");
-        //     igDragFloat(
-        //         "Scale##item",
-        //         &get_loaded_board()->item_scale,
-        //         0.01,
-        //         0.01,
-        //         1.0,
-        //         "%.3f",
-        //         0
-        //     );
-        //     igDragFloat(
-        //         "Elevation##item",
-        //         &get_loaded_board()->item_elevation,
-        //         0.01,
-        //         0.01,
-        //         1.0,
-        //         "%.3f",
-        //         0
-        //     );
-        // }
+            int n_items = SCENE.board.n_items;
+            igInputInt("N items", &n_items, 1, 1, 0);
+            if (n_items >= 0) SCENE.board.n_items = n_items;
+        }
 
         // Draw picked model transform inspector
         if (ig_collapsing_header("Transform", true)) {
@@ -364,6 +368,7 @@ int main(void) {
 
     // -------------------------------------------------------------------
     // Load common resources
+    NO_ITEM_TEXTURE = LoadTextureFromImage(GenImageColor(256, 256, RED));
     BOARD_NAMES = get_file_names_in_dir("resources/boards", &N_BOARDS);
 
     create_scene();
@@ -467,7 +472,7 @@ int main(void) {
                 BeginMode3D(*editor_camera);
                 {
                     draw_scene(false);
-                    // draw_items(false);
+                    draw_items(false);
                 }
                 EndMode3D();
 
@@ -496,7 +501,7 @@ int main(void) {
             BeginMode3D(*game_camera);
             {
                 draw_scene(false);
-                // draw_items(false);
+                draw_items(false);
             }
             EndMode3D();
             EndTextureMode();
@@ -510,11 +515,21 @@ int main(void) {
                 BeginMode3D(*editor_camera);
                 {
                     draw_scene(true);
+                    picked_id = get_entity_id_under_cursor();
+                    printf("entity: %d\n", picked_id);
+                    //
+                }
+
+                ClearBackground(BLANK);
+                BeginMode3D(*editor_camera);
+                {
+                    draw_items(true);
+                    int foo = get_entity_id_under_cursor();
+                    printf("item: %d\n", foo);
                     //
                 }
                 EndMode3D();
                 EndTextureMode();
-                picked_id = get_entity_id_under_cursor();
             }
 
             if (picked_id == -1 && GIZMO.state == RGIZMO_STATE_COLD) {
@@ -567,7 +582,7 @@ int main(void) {
             ClearBackground(BLANK);
             BeginMode3D(*game_camera);
             {
-                // draw_items(true);
+                draw_items(true);
                 //
             }
             EndMode3D();
@@ -582,7 +597,7 @@ int main(void) {
             BeginMode3D(*game_camera);
             {
                 draw_scene(false);
-                // draw_items(false);
+                draw_items(false);
             }
             EndMode3D();
             EndTextureMode();

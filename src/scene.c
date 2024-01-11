@@ -14,10 +14,13 @@
 
 Scene SCENE;
 
-
 void create_scene(void) {
     create_material(LoadMaterialDefault());
     create_mesh(GenMeshPlane(1.0, 1.0, 2, 2));
+
+    SCENE.board.board_scale = 0.7;
+    SCENE.board.item_scale = 0.2;
+    SCENE.board.item_elevation = 0.5;
 }
 
 int create_screen(RenderTexture screen) {
