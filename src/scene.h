@@ -8,34 +8,34 @@
 #define MAX_N_SCREENS 4
 #define MAX_N_CAMERAS 4
 
-#define MAX_N_BOARDS 16
-#define MAX_N_ITEMS 36
-#define MAX_ITEM_NAME_LENGTH 32
-#define MAX_RULE_LENGTH 128
-
-typedef struct Item {
-    char name[MAX_ITEM_NAME_LENGTH];
-    bool is_correct;
-    bool is_alive;
-
-    Texture2D texture;
-} Item;
-
-typedef struct Board {
-    int n_misses_allowed;
-    int n_hits_required;
-
-    int n_items;
-    int n_correct_items;
-    Item items[MAX_N_ITEMS];
-
-    char rule[MAX_RULE_LENGTH];
-
-    // Drawing
-    float board_scale;
-    float item_scale;
-    float item_elevation;
-} Board;
+// #define MAX_N_BOARDS 16
+// #define MAX_N_ITEMS 36
+// #define MAX_ITEM_NAME_LENGTH 32
+// #define MAX_RULE_LENGTH 128
+// 
+// typedef struct Item {
+//     char name[MAX_ITEM_NAME_LENGTH];
+//     bool is_correct;
+//     bool is_alive;
+// 
+//     Texture2D texture;
+// } Item;
+// 
+// typedef struct Board {
+//     int n_misses_allowed;
+//     int n_hits_required;
+// 
+//     int n_items;
+//     int n_correct_items;
+//     Item items[MAX_N_ITEMS];
+// 
+//     char rule[MAX_RULE_LENGTH];
+// 
+//     // Drawing
+//     float board_scale;
+//     float item_scale;
+//     float item_elevation;
+// } Board;
 
 typedef struct Scene {
     struct {
@@ -59,9 +59,9 @@ typedef struct Scene {
     int n_cameras;
     Camera3D camera[MAX_N_CAMERAS];
 
-    int n_boards;
-    int loaded_board_id;
-    Board board[MAX_N_BOARDS];
+    // int n_boards;
+    // int loaded_board_id;
+    // Board board[MAX_N_BOARDS];
 } Scene;
 
 typedef enum Component {
@@ -73,15 +73,12 @@ typedef enum Component {
 extern Scene SCENE;
 
 void create_scene(void);
-void load_board(int board_id);
 
 int create_screen(RenderTexture screen);
 int create_material(Material material);
 int create_mesh(Mesh mesh);
 int create_entity(void);
 int create_camera(void);
-
-Board* get_loaded_board(void);
 
 RenderTexture* get_screen(int screen_id);
 Camera3D* get_camera(int camera_id);

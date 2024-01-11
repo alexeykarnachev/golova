@@ -6,102 +6,18 @@
 #include <stdlib.h>
 #include <string.h>
 
+#define CHECK_ID_INBOUND(id, max_id, entity_type) \
+    if (id >= max_id) { \
+        TraceLog(LOG_ERROR, "Can't get %s with id %d", #entity_type, id); \
+        exit(1); \
+    }
+
 Scene SCENE;
 
-static bool read_int(const char* data, int* dst, size_t* p) {
-    *dst = data[*p];
-    *p += sizeof(int);
-    if (data[*p] != 0x1F) return false;
-    *p += 1;
-    return true;
-}
-
-static void preload_boards(char* file_path) {
-    long n_bytes;
-    char* data = read_cstr_file(file_path, "rb", &n_bytes);
-    size_t p = 0;
-
-    while (data[p] != 0x1C) {
-        Board board = {0};
-
-        if (!read_int(data, &board.n_misses_allowed, &p)) goto fail;
-        if (!read_int(data, &board.n_hits_required, &p)) goto fail;
-        if (!read_int(data, &board.n_correct_items, &p)) goto fail;
-
-        // items
-        while (data[p] != 0x1F) {
-            Item item;
-            item.is_alive = true;
-            item.is_correct = board.n_items < board.n_correct_items;
-            strcpy(item.name, &data[p]);
-
-            board.items[board.n_items] = item;
-            p += strlen(item.name) + 1;
-            board.n_items += 1;
-        }
-        p += 1;
-
-        // rule
-        strcpy(board.rule, &data[p]);
-        p += strlen(board.rule) + 1;
-        if (data[p] != 0x1F) goto fail;
-        p += 1;
-
-        if (data[p] != 0x1E) goto fail;
-        p += 1;
-
-        board.board_scale = 0.7;
-        board.item_scale = 0.1;
-        board.item_elevation = 0.5;
-        SCENE.board[SCENE.n_boards] = board;
-
-        SCENE.n_boards += 1;
-    }
-
-    load_board(0);
-    return;
-fail:
-    TraceLog(LOG_ERROR, "Failed to parse board %d", SCENE.n_boards);
-    exit(1);
-}
-
-static void unload_board(void) {
-    Board* board = &SCENE.board[SCENE.loaded_board_id];
-    for (size_t i = 0; i < board->n_items; ++i) {
-        Texture2D texture = board->items[i].texture;
-        if (IsTextureReady(texture)) {
-            UnloadTexture(texture);
-        }
-    }
-}
-
-void load_board(int board_id) {
-    if (board_id == SCENE.loaded_board_id) {
-        TraceLog(LOG_WARNING, "Board %d is already loaded", board_id);
-    }
-
-    CHECK_ID_INBOUND(board_id, SCENE.n_boards, board);
-
-    unload_board();
-
-    SCENE.loaded_board_id = board_id;
-    Board* board = &SCENE.board[board_id];
-
-    static char file_path[1024];
-    for (size_t i = 0; i < board->n_items; ++i) {
-        sprintf(
-            file_path, "resources/items/sprites/%s.png", board->items[i].name
-        );
-        Image image = LoadImage(file_path);
-        board->items[i].texture = LoadTextureFromImage(image);
-        UnloadImage(image);
-    }
-}
 
 void create_scene(void) {
     create_material(LoadMaterialDefault());
     create_mesh(GenMeshPlane(1.0, 1.0, 2, 2));
-    preload_boards("resources/boards");
 }
 
 int create_screen(RenderTexture screen) {
@@ -155,10 +71,6 @@ int create_camera(void) {
     SCENE.camera[id].up = (Vector3){0.0f, 1.0f, 0.0f};
     SCENE.camera[id].projection = CAMERA_PERSPECTIVE;
     return id;
-}
-
-Board* get_loaded_board(void) {
-    return &SCENE.board[SCENE.loaded_board_id];
 }
 
 RenderTexture* get_screen(int screen_id) {
@@ -233,8 +145,6 @@ bool check_if_entity_has_component(int entity_id, Component component) {
 }
 
 void unload_scene(void) {
-    unload_board();
-
     for (int i = 0; i < SCENE.resource.n_materials; ++i)
         UnloadMaterial(SCENE.resource.material[i]);
     for (int i = 0; i < SCENE.resource.n_meshes; ++i)

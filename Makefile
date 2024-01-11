@@ -1,7 +1,7 @@
 .PHONY: all clean
 
 CC=gcc
-CFLAGS=-Wall -std=c99 -Wno-missing-braces -Wunused-result -I./include
+CFLAGS=-Wall -std=gnu99 -Wno-missing-braces -Wunused-result -I./include
 LDFLAGS=\
 	-L./lib -lraylib -lm -lpthread -ldl -lGL -lstdc++ \
 	-lcimgui -lnfd \
