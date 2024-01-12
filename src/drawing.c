@@ -1,10 +1,6 @@
 #include "drawing.h"
 
-#include "entities.h"
-#include "raylib.h"
 #include "raymath.h"
-#include "rlgl.h"
-#include <stddef.h>
 #include <stdio.h>
 
 static int SCREEN_WIDTH = 1024;
@@ -17,8 +13,6 @@ RenderTexture2D SCREENS[MAX_N_SCREENS];
 RenderTexture2D* FULL_SCREEN;
 RenderTexture2D* THIRD_SCREEN;
 RenderTexture2D* PICKING_SCREEN;
-
-static void rl_transform(Transform transform);
 
 void load_drawing(void) {
     InitWindow(SCREEN_WIDTH, SCREEN_HEIGHT, "Golova");
@@ -39,19 +33,6 @@ void unload_drawing() {
         UnloadRenderTexture(SCREENS[i]);
 }
 
-void draw_entities(void) {
-    for (size_t i = 0; i < N_ENTITIES; ++i) {
-        Entity* e = &ENTITIES[i];
-
-        rlPushMatrix();
-        {
-            rl_transform(e->transform);
-            DrawMesh(*e->mesh, *e->material, MatrixIdentity());
-        }
-        rlPopMatrix();
-    }
-}
-
 void draw_screen_ex(RenderTexture2D* screen, Vector2 position) {
     int w, h;
     Rectangle r;
@@ -69,17 +50,4 @@ void draw_screen(RenderTexture2D* screen) {
 void draw_screen_to_right(RenderTexture2D* screen) {
     Vector2 position = {SCREEN_WIDTH - screen->texture.width, 0.0};
     draw_screen_ex(screen, position);
-}
-
-static void rl_transform(Transform transform) {
-    Vector3 axis;
-    float angle;
-    Vector3 t = transform.translation;
-    Vector3 s = transform.scale;
-    Quaternion q = transform.rotation;
-    QuaternionToAxisAngle(q, &axis, &angle);
-
-    rlTranslatef(t.x, t.y, t.z);
-    rlRotatef(angle * RAD2DEG, axis.x, axis.y, axis.z);
-    rlScalef(s.x, s.y, s.z);
 }

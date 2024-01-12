@@ -1,34 +1,36 @@
 #include "game.h"
 
 #include "drawing.h"
-#include "entities.h"
-#include "raylib.h"
+#include "editor.h"
 #include "resources.h"
-
-Camera3D GAME_CAMERA;
-Camera3D EDITOR_CAMERA;
+#include "scene.h"
+#include <stdio.h>
 
 void start_game(void) {
     load_drawing();
     load_resources();
+    load_scene();
+    load_editor();
 
-    GAME_CAMERA.fovy = 60.0;
-    GAME_CAMERA.projection = CAMERA_PERSPECTIVE;
-    GAME_CAMERA.up = (Vector3){0.0, 1.0, 0.0};
-    EDITOR_CAMERA = GAME_CAMERA;
-    EDITOR_CAMERA.position = (Vector3){5.0, 5.0, 5.0};
-
-    Entity* golova = create_sprite_entity("resources/textures/golova.png");
+    Entity* golova = create_texture_sprite_entity(
+        "resources/textures/golova.png"
+    );
+    Entity* ground = create_shader_sprite_entity("resources/shaders/ground.frag"
+    );
+    golova->transform.translation.x += 4.0;
 
     while (!WindowShouldClose()) {
+        // ---------------------------------------------------------------
+        // Update
+        update_editor();
+        update_scene();
+
+        // ---------------------------------------------------------------
+        // Drawing
         // Draw scene
         BeginTextureMode(*FULL_SCREEN);
         ClearBackground(DARKGRAY);
-        BeginMode3D(EDITOR_CAMERA);
-
-        draw_entities();
-
-        EndMode3D();
+        draw_editor();
         EndTextureMode();
 
         // Blit screen
@@ -37,6 +39,8 @@ void start_game(void) {
         EndDrawing();
     }
 
+    unload_editor();
+    unload_scene();
     unload_resources();
     unload_drawing();
 }

@@ -42,9 +42,15 @@ void load_resources(void) {
     SPRITE_SHADER = LoadShader(0, "resources/shaders/sprite.frag");
 }
 
-Material* load_sprite_material(const char* texture_file_path) {
+Material* load_material(void) {
     Material* material = new_material_ptr();
     *material = LoadMaterialDefault();
+
+    return material;
+}
+
+Material* load_sprite_material(const char* texture_file_path) {
+    Material* material = load_material();
 
     Texture2D texture = LoadTexture(texture_file_path);
     SetTextureFilter(texture, TEXTURE_FILTER_BILINEAR);
@@ -53,6 +59,21 @@ Material* load_sprite_material(const char* texture_file_path) {
     material->maps[0].color = WHITE;
     material->shader = SPRITE_SHADER;
     return material;
+}
+
+Material* load_shader_material(
+    const char* vs_file_path, const char* fs_file_path
+) {
+    Material* material = load_material();
+
+    material->shader = LoadShader(vs_file_path, fs_file_path);
+    return material;
+}
+
+Mesh* load_sphere_mesh(float radius) {
+    Mesh* mesh = new_mesh_ptr();
+    *mesh = GenMeshSphere(radius, 16, 16);
+    return mesh;
 }
 
 Mesh* load_plane_mesh(float aspect) {
