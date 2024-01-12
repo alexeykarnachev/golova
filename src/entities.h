@@ -20,3 +20,4 @@ extern size_t N_ENTITIES;
 extern Entity ENTITIES[MAX_N_ENTITIES];
 
 Entity* create_entity(void);
+Entity* create_sprite_entity(const char* texture_file_path);

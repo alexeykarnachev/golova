@@ -5,6 +5,7 @@
 #include "raymath.h"
 #include "rlgl.h"
 #include <stddef.h>
+#include <stdio.h>
 
 static int SCREEN_WIDTH = 1024;
 static int SCREEN_HEIGHT = 768;
@@ -21,6 +22,7 @@ static void rl_transform(Transform transform);
 
 void load_drawing(void) {
     InitWindow(SCREEN_WIDTH, SCREEN_HEIGHT, "Golova");
+    SetTargetFPS(60);
 
     FULL_SCREEN = &SCREENS[N_SCREENS++];
     *FULL_SCREEN = LoadRenderTexture(SCREEN_WIDTH, SCREEN_HEIGHT);
