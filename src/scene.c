@@ -11,6 +11,9 @@
 
 Scene SCENE;
 
+static void update_camera_shell(void);
+static void update_board_items(void);
+
 void load_scene(void) {
     // Camera shell
     Vector3 camera_position = {0.0, 2.0, 2.0};
@@ -59,14 +62,8 @@ Entity* create_shader_sprite_entity(const char* fs_file_path) {
 }
 
 void update_scene(void) {
-    // Update camera by camera shell
-    Entity* shell = SCENE.camera_shell.entity;
-    Camera3D* camera = &SCENE.camera_shell.camera;
-    camera->position = shell->transform.translation;
-    Vector3 dir = Vector3RotateByQuaternion(
-        (Vector3){0.0, 0.0, -1.0}, shell->transform.rotation
-    );
-    camera->target = Vector3Add(camera->position, dir);
+    update_camera_shell();
+    update_board_items();
 }
 
 void draw_scene(void) {
@@ -84,6 +81,12 @@ void draw_scene(void) {
         rlPopMatrix();
     }
 
+    // Draw items
+    for (size_t i = 0; i < SCENE.board.n_items; ++i) {
+        Item* item = &SCENE.board.items[i];
+        DrawMesh(*DEFAULT_PLANE_MESH, *DEFAULT_MATERIAL, item->mat);
+    }
+
     // Draw camera ray
     rlSetLineWidth(5.0);
     Vector3 start = SCENE.camera_shell.camera.position;
@@ -95,4 +98,41 @@ void draw_scene(void) {
 
 void unload_scene(void) {
     SCENE = (Scene){0};
+}
+
+static void update_camera_shell(void) {
+    Entity* shell = SCENE.camera_shell.entity;
+    Camera3D* camera = &SCENE.camera_shell.camera;
+    camera->position = shell->transform.translation;
+    Vector3 dir = Vector3RotateByQuaternion(
+        (Vector3){0.0, 0.0, -1.0}, shell->transform.rotation
+    );
+    camera->target = Vector3Add(camera->position, dir);
+}
+
+static void update_board_items(void) {
+    Transform t = SCENE.board.entity->transform;
+    t.scale = Vector3Scale(Vector3One(), t.scale.x);
+
+    size_t n_items = SCENE.board.n_items;
+    for (size_t i = 0; i < n_items; ++i) {
+        Item* item = &SCENE.board.items[i];
+        float x = 0.0;
+        float z = 0.0;
+        rlPushMatrix();
+        {
+            rlMultMatrixf(MatrixToFloat(get_transform_matrix(t)));
+            rlScalef(
+                SCENE.board.board_scale, SCENE.board.board_scale, SCENE.board.board_scale
+            );
+            rlTranslatef(x, 0.0, z);
+            rlScalef(
+                SCENE.board.item_scale, SCENE.board.item_scale, SCENE.board.item_scale
+            );
+            rlTranslatef(0.0, SCENE.board.item_elevation, 0.0);
+            rlRotatef(90.0, 1.0, 0.0, 0.0);
+            item->mat = rlGetMatrixTransform();
+        }
+        rlPopMatrix();
+    }
 }

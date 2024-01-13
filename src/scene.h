@@ -24,6 +24,7 @@ typedef struct Item {
     bool is_correct;
     bool is_alive;
 
+    Matrix mat;
     Texture2D texture;
 } Item;
 

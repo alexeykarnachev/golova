@@ -115,6 +115,18 @@ static void draw_imgui(void) {
             igDragFloat("FOV", &camera->fovy, 1.0, 10.0, 170.0, "%.1f", 0);
         }
 
+        if (ig_collapsing_header("Board", true)) {
+            Board* b = &SCENE.board;
+            igInputText("Rule", b->rule, MAX_RULE_LENGTH, 0, 0, NULL);
+            igDragFloat("Board scale", &b->board_scale, 0.01, 0.01, 1.0, "%.3f", 0);
+            igDragFloat("Item Scale", &b->item_scale, 0.01, 0.01, 1.0, "%.3f", 0);
+            igDragFloat("Item elevation", &b->item_elevation, 0.01, 0.01, 1.0, "%.3f", 0);
+
+            int n_items = b->n_items;
+            igInputInt("N items", &n_items, 1, 1, 0);
+            if (n_items > 0 && n_items <= MAX_N_BOARD_ITEMS) b->n_items = n_items;
+        }
+
         if (ig_collapsing_header("Transform", true) && PICKED_ENTITY) {
             Transform* t = &PICKED_ENTITY->transform;
             igDragFloat3("Scale", (float*)&t->scale, 0.1, 0.1, 100.0, "%.1f", 0);

@@ -6,8 +6,6 @@
 static size_t N_MATERIALS;
 static size_t N_MESHES;
 
-static Shader SPRITE_SHADER;
-
 Material MATERIALS[MAX_N_MATERILAS];
 Mesh MESHES[MAX_N_MESHES];
 
@@ -38,8 +36,6 @@ void load_resources(void) {
 
     DEFAULT_CUBE_MESH = new_mesh_ptr();
     *DEFAULT_CUBE_MESH = GenMeshCube(1.0, 1.0, 1.0);
-
-    SPRITE_SHADER = LoadShader(0, "resources/shaders/sprite.frag");
 }
 
 Material* load_material(void) {
@@ -52,12 +48,14 @@ Material* load_material(void) {
 Material* load_sprite_material(const char* texture_file_path) {
     Material* material = load_material();
 
-    Texture2D texture = LoadTexture(texture_file_path);
-    SetTextureFilter(texture, TEXTURE_FILTER_BILINEAR);
+    if (texture_file_path) {
+        Texture2D texture = LoadTexture(texture_file_path);
+        SetTextureFilter(texture, TEXTURE_FILTER_BILINEAR);
+        material->maps[0].texture = texture;
+    }
 
-    material->maps[0].texture = texture;
     material->maps[0].color = WHITE;
-    material->shader = SPRITE_SHADER;
+    material->shader = LoadShader(0, "resources/shaders/sprite.frag");
     return material;
 }
 
