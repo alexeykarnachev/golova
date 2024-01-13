@@ -47,7 +47,7 @@ void draw_screen(RenderTexture2D* screen) {
     draw_screen_ex(screen, Vector2Zero());
 }
 
-void draw_screen_to_right(RenderTexture2D* screen) {
+void draw_screen_top_right(RenderTexture2D* screen) {
     Vector2 position = {SCREEN_WIDTH - screen->texture.width, 0.0};
     draw_screen_ex(screen, position);
 }

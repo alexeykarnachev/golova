@@ -11,25 +11,23 @@
 
 Scene SCENE;
 
-static void draw_camera_ray(void);
-
 void load_scene(void) {
-    // Camera
-    SCENE.camera.fovy = 60.0;
-    SCENE.camera.projection = CAMERA_PERSPECTIVE;
-    SCENE.camera.up = (Vector3){0.0, 1.0, 0.0};
-    SCENE.camera.position = (Vector3){0.0, 2.0, 2.0};
-
     // Camera shell
-    Entity* camera_shell = create_entity();
-    camera_shell->transform.translation = SCENE.camera.position;
-    camera_shell->mesh = load_sphere_mesh(0.2);
-    camera_shell->material->maps[0].color = RAYWHITE;
-    camera_shell->tag |= CAMERA_SHELL_ENTITY;
-}
+    Vector3 camera_position = {0.0, 2.0, 2.0};
+    SCENE.camera_shell.entity = create_entity();
+    SCENE.camera_shell.entity->transform.translation = camera_position;
+    SCENE.camera_shell.entity->mesh = load_sphere_mesh(0.2);
+    SCENE.camera_shell.entity->material->maps[0].color = RAYWHITE;
+    SCENE.camera_shell.camera.fovy = 60.0;
+    SCENE.camera_shell.camera.projection = CAMERA_PERSPECTIVE;
+    SCENE.camera_shell.camera.up = (Vector3){0.0, 1.0, 0.0};
+    SCENE.camera_shell.camera.position = camera_position;
 
-bool entity_has_tag(Entity* e, EntityTag tag) {
-    return (e->tag & tag) == tag;
+    // Board
+    SCENE.board.entity = create_shader_sprite_entity("resources/shaders/board.frag");
+    SCENE.board.board_scale = 0.7;
+    SCENE.board.item_scale = 0.2;
+    SCENE.board.item_elevation = 0.5;
 }
 
 Entity* create_entity(void) {
@@ -61,19 +59,14 @@ Entity* create_shader_sprite_entity(const char* fs_file_path) {
 }
 
 void update_scene(void) {
-    for (size_t i = 0; i < SCENE.n_entities; ++i) {
-        Entity* e = &SCENE.entities[i];
-        Transform* t = &e->transform;
-
-        // Update camera by camera shell
-        if (entity_has_tag(e, CAMERA_SHELL_ENTITY)) {
-            SCENE.camera.position = t->translation;
-            Vector3 dir = Vector3RotateByQuaternion(
-                (Vector3){0.0, 0.0, -1.0}, t->rotation
-            );
-            SCENE.camera.target = Vector3Add(SCENE.camera.position, dir);
-        }
-    }
+    // Update camera by camera shell
+    Entity* shell = SCENE.camera_shell.entity;
+    Camera3D* camera = &SCENE.camera_shell.camera;
+    camera->position = shell->transform.translation;
+    Vector3 dir = Vector3RotateByQuaternion(
+        (Vector3){0.0, 0.0, -1.0}, shell->transform.rotation
+    );
+    camera->target = Vector3Add(camera->position, dir);
 }
 
 void draw_scene(void) {
@@ -91,18 +84,15 @@ void draw_scene(void) {
         rlPopMatrix();
     }
 
-    draw_camera_ray();
+    // Draw camera ray
+    rlSetLineWidth(5.0);
+    Vector3 start = SCENE.camera_shell.camera.position;
+    Vector3 target = SCENE.camera_shell.camera.target;
+    Vector3 dir = Vector3Normalize(Vector3Subtract(target, start));
+    Vector3 end = Vector3Add(start, Vector3Scale(dir, 1.0));
+    DrawLine3D(start, end, PINK);
 }
 
 void unload_scene(void) {
     SCENE = (Scene){0};
-}
-
-static void draw_camera_ray(void) {
-    rlSetLineWidth(5.0);
-    Vector3 start = SCENE.camera.position;
-    Vector3 target = SCENE.camera.target;
-    Vector3 dir = Vector3Normalize(Vector3Subtract(target, start));
-    Vector3 end = Vector3Add(start, Vector3Scale(dir, 1.0));
-    DrawLine3D(start, end, PINK);
 }

@@ -4,14 +4,12 @@
 #include "raymath.h"
 #include "rcamera.h"
 
-void update_orbital_camera(Camera3D* camera) {
+void update_orbital_camera(
+    Camera3D* camera, bool is_mmb_down, bool is_shift_down, Vector2 mouse_delta
+) {
     static float rot_speed = 0.003f;
     static float move_speed = 0.01f;
     static float zoom_speed = 1.0f;
-
-    bool is_mmb_down = IsMouseButtonDown(2);
-    bool is_shift_down = IsKeyDown(KEY_LEFT_SHIFT);
-    Vector2 mouse_delta = GetMouseDelta();
 
     if (is_mmb_down && is_shift_down) {
         // Shift + MMB + mouse move -> change the camera position in the

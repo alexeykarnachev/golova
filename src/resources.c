@@ -61,9 +61,7 @@ Material* load_sprite_material(const char* texture_file_path) {
     return material;
 }
 
-Material* load_shader_material(
-    const char* vs_file_path, const char* fs_file_path
-) {
+Material* load_shader_material(const char* vs_file_path, const char* fs_file_path) {
     Material* material = load_material();
 
     material->shader = LoadShader(vs_file_path, fs_file_path);

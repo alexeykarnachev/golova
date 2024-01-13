@@ -21,7 +21,6 @@ CollisionInfo cast_ray(Ray ray) {
         }
     }
 
-    CollisionInfo info = {
-        .collision = nearest_collision, .entity = nearest_entity};
+    CollisionInfo info = {.collision = nearest_collision, .entity = nearest_entity};
     return info;
 }
