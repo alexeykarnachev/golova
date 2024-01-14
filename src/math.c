@@ -1,6 +1,14 @@
 #include "math.h"
 
 #include "raymath.h"
+#include <stdio.h>
+
+Transform get_default_transform(void) {
+    Transform transform = {0};
+    transform.scale = Vector3One();
+    transform.rotation.w = 1.0;
+    return transform;
+}
 
 Matrix get_transform_matrix(Transform transform) {
     Vector3 t = transform.translation;
@@ -13,11 +21,4 @@ Matrix get_transform_matrix(Transform transform) {
     Matrix m = MatrixMultiply(ms, MatrixMultiply(mr, mt));
 
     return m;
-}
-
-BoundingBox get_mesh_bounding_box(Mesh mesh, Matrix mat) {
-    BoundingBox box = GetMeshBoundingBox(mesh);
-    box.max = Vector3Transform(box.max, mat);
-    box.min = Vector3Transform(box.min, mat);
-    return box;
 }
