@@ -84,7 +84,8 @@ void draw_scene(void) {
     // Draw items
     for (size_t i = 0; i < SCENE.board.n_items; ++i) {
         Item* item = &SCENE.board.items[i];
-        DrawMesh(*DEFAULT_PLANE_MESH, *DEFAULT_MATERIAL, item->mat);
+        ITEM_MATERIAL->maps[0].texture = item->texture;
+        DrawMesh(*DEFAULT_PLANE_MESH, *ITEM_MATERIAL, item->mat);
     }
 
     // Draw camera ray
@@ -97,6 +98,9 @@ void draw_scene(void) {
 }
 
 void unload_scene(void) {
+    for (size_t i = 0; i < SCENE.board.n_items; ++i) {
+        UnloadTexture(SCENE.board.items[i].texture);
+    }
     SCENE = (Scene){0};
 }
 
@@ -111,25 +115,31 @@ static void update_camera_shell(void) {
 }
 
 static void update_board_items(void) {
-    Transform t = SCENE.board.entity->transform;
+    Board* b = &SCENE.board;
+    Transform t = b->entity->transform;
     t.scale = Vector3Scale(Vector3One(), t.scale.x);
 
-    size_t n_items = SCENE.board.n_items;
+    size_t n_items = b->n_items;
+    if (n_items == 0) return;
+
+    int n_rows = sqrt(n_items);
+    int n_cols = ceil((float)n_items / n_rows);
     for (size_t i = 0; i < n_items; ++i) {
-        Item* item = &SCENE.board.items[i];
-        float x = 0.0;
-        float z = 0.0;
+        Item* item = &b->items[i];
+
+        int i_row = i / n_cols;
+        int i_col = i % n_cols;
+
+        float z = n_rows > 1 ? (float)i_row / (n_rows - 1) - 0.5 : 0.0;
+        float x = n_cols > 1 ? (float)i_col / (n_cols - 1) - 0.5 : 0.0;
+
         rlPushMatrix();
         {
             rlMultMatrixf(MatrixToFloat(get_transform_matrix(t)));
-            rlScalef(
-                SCENE.board.board_scale, SCENE.board.board_scale, SCENE.board.board_scale
-            );
+            rlScalef(b->board_scale, b->board_scale, b->board_scale);
             rlTranslatef(x, 0.0, z);
-            rlScalef(
-                SCENE.board.item_scale, SCENE.board.item_scale, SCENE.board.item_scale
-            );
-            rlTranslatef(0.0, SCENE.board.item_elevation, 0.0);
+            rlScalef(b->item_scale, b->item_scale, b->item_scale);
+            rlTranslatef(0.0, b->item_elevation, 0.0);
             rlRotatef(90.0, 1.0, 0.0, 0.0);
             item->mat = rlGetMatrixTransform();
         }

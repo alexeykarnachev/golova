@@ -8,7 +8,7 @@ extern Material MATERIALS[MAX_N_MATERILAS];
 extern Mesh MESHES[MAX_N_MESHES];
 
 extern Material* DEFAULT_MATERIAL;
-extern Material* SPRITE_MATERIAL;
+extern Material* ITEM_MATERIAL;
 
 extern Mesh* DEFAULT_PLANE_MESH;
 extern Mesh* DEFAULT_SPHERE_MESH;

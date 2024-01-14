@@ -15,10 +15,9 @@ Matrix get_transform_matrix(Transform transform) {
     return m;
 }
 
-BoundingBox get_mesh_bounding_box(Mesh mesh, Transform transform) {
+BoundingBox get_mesh_bounding_box(Mesh mesh, Matrix mat) {
     BoundingBox box = GetMeshBoundingBox(mesh);
-    Matrix m = get_transform_matrix(transform);
-    box.max = Vector3Transform(box.max, m);
-    box.min = Vector3Transform(box.min, m);
+    box.max = Vector3Transform(box.max, mat);
+    box.min = Vector3Transform(box.min, mat);
     return box;
 }

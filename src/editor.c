@@ -3,8 +3,10 @@
 #include "camera.h"
 #include "cimgui_utils.h"
 #include "collisions.h"
+#include "nfd_utils.h"
 #include "raylib.h"
 #include "raymath.h"
+#include "utils.h"
 #include <stdbool.h>
 
 #define CIMGUI_DEFINE_ENUMS_AND_STRUCTS
@@ -20,6 +22,7 @@
 static Camera3D CAMERA;
 static RGizmo GIZMO;
 static Entity* PICKED_ENTITY;
+static Item* PICKED_ITEM;
 
 static int IG_ID;
 static bool IS_IG_INTERACTED;
@@ -49,6 +52,7 @@ void update_editor(void) {
         // Pick the entity
         CollisionInfo info = cast_ray(GetMouseRay(GetMousePosition(), CAMERA));
         PICKED_ENTITY = info.entity;
+        PICKED_ITEM = info.item;
     }
 
     if (PICKED_ENTITY) {
@@ -125,6 +129,39 @@ static void draw_imgui(void) {
             int n_items = b->n_items;
             igInputInt("N items", &n_items, 1, 1, 0);
             if (n_items > 0 && n_items <= MAX_N_BOARD_ITEMS) b->n_items = n_items;
+        }
+
+        if (ig_collapsing_header("Item", true) && PICKED_ITEM) {
+            int texture_id = PICKED_ITEM->texture.id;
+
+            bool is_clicked = igImageButton(
+                "##item_texture",
+                (ImTextureID)(long)texture_id,
+                (ImVec2){128.0, 128.0},
+                (ImVec2){0.0, 0.0},
+                (ImVec2){1.0, 1.0},
+                (ImVec4){0.0, 0.0, 0.0, 1.0},
+                (ImVec4){1.0, 1.0, 1.0, 1.0}
+            );
+
+            if (is_clicked) {
+                static nfdfilteritem_t filter[1] = {{"Texture", "png"}};
+                char* fp = open_nfd("resources/items/sprites", filter, 1);
+                if (fp != NULL) {
+                    get_file_name(PICKED_ITEM->name, fp, true);
+                    if (IsTextureReady(PICKED_ITEM->texture)) {
+                        UnloadTexture(PICKED_ITEM->texture);
+                    }
+                    PICKED_ITEM->texture = LoadTexture(fp);
+                    NFD_FreePathN(fp);
+                }
+            }
+
+            igSameLine(0.0, 5.0);
+            igBeginGroup();
+            igText(PICKED_ITEM->name[0] == '\0' ? "???" : PICKED_ITEM->name);
+            igCheckbox("Is correct", &PICKED_ITEM->is_correct);
+            igEndGroup();
         }
 
         if (ig_collapsing_header("Transform", true) && PICKED_ENTITY) {

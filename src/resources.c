@@ -10,6 +10,7 @@ Material MATERIALS[MAX_N_MATERILAS];
 Mesh MESHES[MAX_N_MESHES];
 
 Material* DEFAULT_MATERIAL;
+Material* ITEM_MATERIAL;
 
 Mesh* DEFAULT_PLANE_MESH;
 Mesh* DEFAULT_SPHERE_MESH;
@@ -27,6 +28,8 @@ void load_resources(void) {
     // Default resources
     DEFAULT_MATERIAL = new_material_ptr();
     *DEFAULT_MATERIAL = LoadMaterialDefault();
+
+    ITEM_MATERIAL = load_sprite_material(0);
 
     DEFAULT_PLANE_MESH = new_mesh_ptr();
     *DEFAULT_PLANE_MESH = GenMeshPlane(1.0, 1.0, 2, 2);
