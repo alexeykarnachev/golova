@@ -15,7 +15,7 @@ void start_game(void) {
     load_scene();
     load_editor();
 
-    Entity* golova = create_texture_sprite_entity("resources/textures/golova.png");
+    Entity* golova = create_texture_sprite_entity("resources/golova/sprites/golova.png");
     golova->transform.translation.x += 4.0;
 
     while (!WindowShouldClose()) {

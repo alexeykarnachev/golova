@@ -2,6 +2,7 @@
 
 #include "math.h"
 #include "resources.h"
+#include <stdio.h>
 
 CollisionInfo cast_ray(Ray ray) {
     RayCollision nearest_collision = {0};
@@ -15,6 +16,7 @@ CollisionInfo cast_ray(Ray ray) {
         BoundingBox box = get_mesh_bounding_box(
             *mesh, get_transform_matrix(entity->transform)
         );
+
         RayCollision collision = GetRayCollisionBox(ray, box);
         if (!collision.hit) continue;
 
