@@ -210,7 +210,6 @@ static void update_scene_save_load(void) {
             load_scene(fp);
             reset_camera_shell();
             strcpy(SCENE_FILE_PATH, fp);
-            SetWindowTitle(SCENE_FILE_PATH);
         }
     }
 }
@@ -399,7 +398,7 @@ static void draw_imgui(void) {
         }
 
         if (ig_collapsing_header("Item", true) && get_picked_entity_type() == ITEM_TYPE) {
-            Item* item = (Item*)PICKED_COLLISION_INFO->entity;
+            Item* item = get_picked_entity();
             Texture2D texture = item->material.maps[0].texture;
             int texture_id = texture.id;
 
@@ -446,6 +445,12 @@ static void draw_imgui(void) {
             e = Vector3Scale(e, DEG2RAD);
             t->rotation = QuaternionFromEuler(e.x, e.y, e.z);
         }
+    }
+    igEnd();
+
+    ig_fix_window_bot_left();
+    if (igBegin("Debug info", NULL, GHOST_WINDOW_FLAGS)) {
+        igText("Scene: %s", SCENE_FILE_PATH);
     }
     igEnd();
 }
