@@ -79,7 +79,7 @@ static void update_picking(void);
 static void update_camera_shell(void);
 static void update_camera(void);
 static void update_gizmo(void);
-static void set_board_n_items(int n_items);
+static void set_board_values(int n_items, int n_hits_required, int n_misses_allowed);
 static void draw_editor_grid(void);
 static void draw_camera_shell(void);
 static void draw_item_boxes(void);
@@ -321,12 +321,10 @@ static void update_camera_shell(void) {
     SCENE.camera.target = Vector3Add(SCENE.camera.position, dir);
 }
 
-static void set_board_n_items(int n_items) {
+static void set_board_values(int n_items, int n_hits_required, int n_misses_allowed) {
     Board* b = &SCENE.board;
 
-    if (n_items < 0 || n_items > MAX_N_BOARD_ITEMS || n_items == b->n_items) return;
-
-    PICKED_COLLISION_INFO = NULL;
+    if (n_items < 0 || n_items > MAX_N_BOARD_ITEMS) return;
     while (n_items < b->n_items) {
         b->n_items -= 1;
         Item* item = &b->items[b->n_items];
@@ -334,13 +332,18 @@ static void set_board_n_items(int n_items) {
         UnloadMesh(item->mesh);
         *item = (Item){0};
     }
-
     while (n_items > b->n_items) {
         Item* item = &b->items[b->n_items];
         item->material = LoadMaterialDefault();
         item->mesh = GenMeshPlane(1.0, 1.0, 2, 2);
         b->n_items += 1;
     }
+
+    n_hits_required = CLAMP(n_hits_required, 0, b->n_items);
+    n_misses_allowed = CLAMP(n_misses_allowed, 0, b->n_items);
+    if (n_hits_required + n_misses_allowed > b->n_items) return;
+    b->n_hits_required = n_hits_required;
+    b->n_misses_allowed = n_misses_allowed;
 }
 
 static void draw_editor_grid(void) {
@@ -393,8 +396,14 @@ static void draw_imgui(void) {
             igDragFloat("Item elevation", &b->item_elevation, 0.01, 0.01, 1.0, "%.3f", 0);
 
             int n_items = b->n_items;
-            igInputInt("N items", &n_items, 1, 1, 0);
-            set_board_n_items(n_items);
+            int n_hits_required = b->n_hits_required;
+            int n_misses_allowed = b->n_misses_allowed;
+            if (igInputInt("N items", &n_items, 1, 1, 0)) {
+                PICKED_COLLISION_INFO = NULL;
+            }
+            igInputInt("N hits required", &n_hits_required, 1, 1, 0);
+            igInputInt("N misses allowed", &n_misses_allowed, 1, 1, 0);
+            set_board_values(n_items, n_hits_required, n_misses_allowed);
         }
 
         if (ig_collapsing_header("Item", true) && get_picked_entity_type() == ITEM_TYPE) {
