@@ -57,7 +57,6 @@ static CollisionInfo COLLISION_INFOS[MAX_N_COLLISION_INFOS];
 static bool IS_MMB_DOWN;
 static bool IS_LMB_PRESSED;
 static bool IS_SHIFT_DOWN;
-static bool IS_SAVE_PRESSED;
 static float MOUSE_WHEEL_MOVE;
 static Vector2 MOUSE_POSITION;
 static Vector2 MOUSE_DELTA;
@@ -69,7 +68,7 @@ static Transform* get_picked_transform(void);
 static void* get_picked_entity(void);
 static EntityType get_picked_entity_type(void);
 
-static void update_scene_saving(void);
+static void update_scene_save_load(void);
 static void update_collision_infos(void);
 static void update_input(void);
 static void update_picking(void);
@@ -84,7 +83,7 @@ static void draw_imgui(void);
 int main(void) {
     InitWindow(SCREEN_WIDTH, SCREEN_HEIGHT, "Editor");
     SetTargetFPS(60);
-    load_scene("resources/scenes/0.gsc");
+    load_scene(NULL);
     load_imgui();
 
     FULL_SCREEN = LoadRenderTexture(SCREEN_WIDTH, SCREEN_HEIGHT);
@@ -107,7 +106,7 @@ int main(void) {
     CAMERA.up = (Vector3){0.0, 1.0, 0.0};
 
     while (!WindowShouldClose()) {
-        update_scene_saving();
+        update_scene_save_load();
         update_collision_infos();
         update_input();
         update_scene();
@@ -180,19 +179,29 @@ static EntityType get_picked_entity_type(void) {
     return PICKED_COLLISION_INFO->entity_type;
 }
 
-static void update_scene_saving(void) {
-    if (!IS_SAVE_PRESSED) return;
+static void update_scene_save_load(void) {
+    bool is_save_pressed = IsKeyDown(KEY_LEFT_CONTROL) && IsKeyPressed(KEY_S);
+    bool is_load_pressed = IsKeyDown(KEY_LEFT_CONTROL) && IsKeyPressed(KEY_O);
+    static nfdfilteritem_t filter[1] = {{"Scene", "gsc"}};
 
-    if (SCENE_FILE_PATH[0] == '\0') {
-        static nfdfilteritem_t filter[1] = {{"Scene", "gsc"}};
-        char* fp = save_nfd("resources/scenes", filter, 1);
+    if (is_save_pressed) {
+        if (SCENE_FILE_PATH[0] == '\0' || IsKeyDown(KEY_LEFT_SHIFT)) {
+            char* fp = save_nfd("resources/scenes", filter, 1);
+            if (fp != NULL) {
+                strcpy(SCENE_FILE_PATH, fp);
+                NFD_FreePathN(fp);
+            }
+        }
+
+        if (SCENE_FILE_PATH[0] != '\0') save_scene(SCENE_FILE_PATH);
+    } else if (is_load_pressed) {
+        char* fp = open_nfd("resources/scenes", filter, 1);
         if (fp != NULL) {
-            strcpy(SCENE_FILE_PATH, fp);
-            NFD_FreePathN(fp);
+            unload_scene();
+            load_scene(fp);
+            SetWindowTitle(fp);
         }
     }
-
-    if (SCENE_FILE_PATH[0] != '\0') save_scene(SCENE_FILE_PATH);
 }
 
 static void update_collision_infos(void) {
@@ -227,7 +236,6 @@ static void update_input(void) {
     IS_MMB_DOWN = IsMouseButtonDown(2) && !IS_IG_INTERACTED;
     IS_LMB_PRESSED = IsMouseButtonPressed(0) && !IS_IG_INTERACTED;
     IS_SHIFT_DOWN = IsKeyDown(KEY_LEFT_SHIFT) && !IS_IG_INTERACTED;
-    IS_SAVE_PRESSED = IsKeyDown(KEY_LEFT_CONTROL) && IsKeyPressed(KEY_S);
     MOUSE_POSITION = GetMousePosition();
     MOUSE_DELTA = GetMouseDelta();
     MOUSE_WHEEL_MOVE = GetMouseWheelMove();
