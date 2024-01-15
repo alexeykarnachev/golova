@@ -2,6 +2,8 @@
 #include "../src/drawing.h"
 #include "../src/math.h"
 #include "../src/cimgui_utils.h"
+#include "../src/nfd_utils.h"
+#include "../src/utils.h"
 #include "rcamera.h"
 #include "raylib.h"
 #include "raymath.h"
@@ -18,6 +20,7 @@
 #define MAX_N_COLLISION_INFOS 64
 
 typedef enum EntityType {
+    NULL_TYPE = 0,
     CAMERA_SHELL_TYPE,
     GOLOVA_TYPE,
     BOARD_TYPE,
@@ -29,6 +32,7 @@ typedef struct CollisionInfo {
     Transform *transform;
     BoundingBox box;
     EntityType entity_type;
+    void *entity;
 } CollisionInfo;
 
 typedef struct CameraShell {
@@ -57,9 +61,13 @@ static Vector2 MOUSE_DELTA;
 static int IG_ID;
 static bool IS_IG_INTERACTED;
 
+static Transform* get_picked_transform(void);
+static void* get_picked_entity(void);
+static EntityType get_picked_entity_type(void);
+
 static void update_collision_infos(void);
 static void update_input(void);
-static void update_mouse_picking(void);
+static void update_picking(void);
 static void update_camera_shell(void);
 static void update_camera(void);
 static void update_gizmo(void);
@@ -89,7 +97,6 @@ int main(void) {
     CAMERA.projection = CAMERA_PERSPECTIVE;
     CAMERA.up = (Vector3){0.0, 1.0, 0.0};
 
-
     while (!WindowShouldClose()) {
         update_collision_infos();
         update_input();
@@ -97,7 +104,7 @@ int main(void) {
         update_gizmo();
         update_camera();
         update_camera_shell();
-        update_mouse_picking();
+        update_picking();
   
         // Draw main editor screen
         BeginTextureMode(FULL_SCREEN);
@@ -117,8 +124,8 @@ int main(void) {
         EndMode3D();
 
         BeginMode3D(CAMERA);
-        if (PICKED_COLLISION_INFO && PICKED_COLLISION_INFO->transform) {
-            rgizmo_draw(GIZMO, CAMERA, PICKED_COLLISION_INFO->transform->translation);
+        if (get_picked_transform()) {
+            rgizmo_draw(GIZMO, CAMERA, get_picked_transform()->translation);
         }
         EndMode3D();
 
@@ -148,6 +155,21 @@ int main(void) {
     return 0;
 }
 
+static Transform* get_picked_transform(void) {
+    if (!PICKED_COLLISION_INFO) return NULL;
+    return PICKED_COLLISION_INFO->transform;
+}
+
+static void* get_picked_entity(void) {
+    if (!PICKED_COLLISION_INFO) return NULL;
+    return PICKED_COLLISION_INFO->entity;
+}
+
+static EntityType get_picked_entity_type(void) {
+    if (!PICKED_COLLISION_INFO) return NULL_TYPE;
+    return PICKED_COLLISION_INFO->entity_type;
+}
+
 static void update_collision_infos(void) {
     N_COLLISION_INFOS = 0;
 
@@ -171,23 +193,24 @@ static void update_collision_infos(void) {
 
         COLLISION_INFOS[N_COLLISION_INFOS].entity_type = ITEM_TYPE;
         COLLISION_INFOS[N_COLLISION_INFOS].transform = NULL;
+        COLLISION_INFOS[N_COLLISION_INFOS].entity = item;
         COLLISION_INFOS[N_COLLISION_INFOS++].box = box;
     }
 }
 
 static void update_input(void) {
-    IS_MMB_DOWN = IsMouseButtonDown(2);
-    IS_LMB_PRESSED = IsMouseButtonPressed(0);
-    IS_SHIFT_DOWN = IsKeyDown(KEY_LEFT_SHIFT);
+    IS_MMB_DOWN = IsMouseButtonDown(2) && !IS_IG_INTERACTED;
+    IS_LMB_PRESSED = IsMouseButtonPressed(0) && !IS_IG_INTERACTED;
+    IS_SHIFT_DOWN = IsKeyDown(KEY_LEFT_SHIFT) && !IS_IG_INTERACTED;
     MOUSE_POSITION = GetMousePosition();
     MOUSE_DELTA = GetMouseDelta();
     MOUSE_WHEEL_MOVE = GetMouseWheelMove();
 }
 
 static void update_gizmo(void) {
-    if (!PICKED_COLLISION_INFO || !PICKED_COLLISION_INFO->transform) return;
+    Transform* t = get_picked_transform();
+    if (!t) return;
 
-    Transform* t = PICKED_COLLISION_INFO->transform;
     rgizmo_update(&GIZMO, CAMERA, t->translation);
     t->translation = Vector3Add(t->translation, GIZMO.update.translation);
     t->rotation = QuaternionMultiply(
@@ -222,7 +245,7 @@ static void update_camera(void) {
     CameraMoveToTarget(&CAMERA, -MOUSE_WHEEL_MOVE * zoom_speed);
 }
 
-static void update_mouse_picking(void) {
+static void update_picking(void) {
     if (!IS_LMB_PRESSED || GIZMO.state != RGIZMO_STATE_COLD) return;
 
     PICKED_COLLISION_INFO = NULL;
@@ -264,6 +287,7 @@ static void set_board_n_items(int n_items) {
 
     if (n_items < 0 || n_items > MAX_N_BOARD_ITEMS || n_items == b->n_items) return;
 
+    PICKED_COLLISION_INFO = NULL;
     while (n_items < b->n_items) {
         b->n_items -= 1;
         Item *item = &b->items[b->n_items];
@@ -322,6 +346,55 @@ static void draw_imgui(void) {
             int n_items = b->n_items;
             igInputInt("N items", &n_items, 1, 1, 0);
             set_board_n_items(n_items);
+        }
+
+        if (ig_collapsing_header("Item", true) && get_picked_entity_type() == ITEM_TYPE) {
+            Item *item = (Item*)PICKED_COLLISION_INFO->entity;
+            Texture2D texture = item->material.maps[0].texture;
+            int texture_id = texture.id;
+
+            bool is_clicked = igImageButton(
+                "##item_texture",
+                (ImTextureID)(long)texture_id,
+                (ImVec2){128.0, 128.0},
+                (ImVec2){0.0, 0.0},
+                (ImVec2){1.0, 1.0},
+                (ImVec4){0.0, 0.0, 0.0, 1.0},
+                (ImVec4){1.0, 1.0, 1.0, 1.0}
+            );
+
+            if (is_clicked) {
+                static nfdfilteritem_t filter[1] = {{"Texture", "png"}};
+                char* fp = open_nfd("resources/items/sprites", filter, 1);
+                if (fp != NULL) {
+                    get_file_name(item->name, fp, true);
+                    if (IsMaterialReady(item->material)) {
+                        UnloadMaterial(item->material);
+                    }
+                    item->material = LoadMaterialDefault();
+                    item->material.maps[0].texture = LoadTexture(fp);
+                    NFD_FreePathN(fp);
+                }
+            }
+
+            igSameLine(0.0, 5.0);
+            igBeginGroup();
+            igText(item->name[0] == '\0' ? "???" : item->name);
+            igCheckbox("Is correct", &item->is_correct);
+            igEndGroup();
+        }
+
+        if (ig_collapsing_header("Transform", true) && get_picked_transform()) {
+            Transform* t = get_picked_transform();
+            igDragFloat3("Scale", (float*)&t->scale, 0.1, 0.1, 100.0, "%.1f", 0);
+            igDragFloat3(
+                "Translation", (float*)&t->translation, 0.1, -100.0, 100.0, "%.2f", 0
+            );
+
+            Vector3 e = Vector3Scale(QuaternionToEuler(t->rotation), RAD2DEG);
+            igDragFloat3("Rotation", (float*)&e, 5.0, -180.0, 180.0, "%.2f", 0);
+            e = Vector3Scale(e, DEG2RAD);
+            t->rotation = QuaternionFromEuler(e.x, e.y, e.z);
         }
     }
     igEnd();
