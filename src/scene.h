@@ -50,6 +50,8 @@ typedef struct Scene {
 
 extern Scene SCENE;
 
-void load_scene(void);
+void load_scene(const char* file_path);
+void save_scene(const char* file_path);
+void unload_scene(void);
 void update_scene(void);
 void draw_scene(void);

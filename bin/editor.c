@@ -1,13 +1,14 @@
-#include "../src/scene.h"
+#include "../src/cimgui_utils.h"
 #include "../src/drawing.h"
 #include "../src/math.h"
-#include "../src/cimgui_utils.h"
 #include "../src/nfd_utils.h"
+#include "../src/scene.h"
 #include "../src/utils.h"
-#include "rcamera.h"
 #include "raylib.h"
 #include "raymath.h"
+#include "rcamera.h"
 #include "rlgl.h"
+#include <string.h>
 
 #define RAYGIZMO_IMPLEMENTATION
 #include "raygizmo.h"
@@ -29,10 +30,10 @@ typedef enum EntityType {
 
 typedef struct CollisionInfo {
     RayCollision collision;
-    Transform *transform;
+    Transform* transform;
     BoundingBox box;
     EntityType entity_type;
-    void *entity;
+    void* entity;
 } CollisionInfo;
 
 typedef struct CameraShell {
@@ -47,13 +48,16 @@ static RGizmo GIZMO;
 static Camera3D CAMERA;
 static CameraShell CAMERA_SHELL;
 
+static char SCENE_FILE_PATH[2048];
+
 static size_t N_COLLISION_INFOS;
-static CollisionInfo *PICKED_COLLISION_INFO;
+static CollisionInfo* PICKED_COLLISION_INFO;
 static CollisionInfo COLLISION_INFOS[MAX_N_COLLISION_INFOS];
 
 static bool IS_MMB_DOWN;
 static bool IS_LMB_PRESSED;
 static bool IS_SHIFT_DOWN;
+static bool IS_SAVE_PRESSED;
 static float MOUSE_WHEEL_MOVE;
 static Vector2 MOUSE_POSITION;
 static Vector2 MOUSE_DELTA;
@@ -65,6 +69,7 @@ static Transform* get_picked_transform(void);
 static void* get_picked_entity(void);
 static EntityType get_picked_entity_type(void);
 
+static void update_scene_saving(void);
 static void update_collision_infos(void);
 static void update_input(void);
 static void update_picking(void);
@@ -79,7 +84,7 @@ static void draw_imgui(void);
 int main(void) {
     InitWindow(SCREEN_WIDTH, SCREEN_HEIGHT, "Editor");
     SetTargetFPS(60);
-    load_scene();
+    load_scene("resources/scenes/0.gsc");
     load_imgui();
 
     FULL_SCREEN = LoadRenderTexture(SCREEN_WIDTH, SCREEN_HEIGHT);
@@ -88,6 +93,10 @@ int main(void) {
 
     CAMERA_SHELL.transform = get_default_transform();
     CAMERA_SHELL.transform.translation = SCENE.camera.position;
+    CAMERA_SHELL.transform.rotation = QuaternionFromVector3ToVector3(
+        (Vector3){0.0, 0.0, -1.0},
+        Vector3Subtract(SCENE.camera.target, SCENE.camera.position)
+    );
     CAMERA_SHELL.mesh = GenMeshSphere(0.2, 16, 16);
     CAMERA_SHELL.material = LoadMaterialDefault();
     CAMERA_SHELL.material.maps[0].color = RAYWHITE;
@@ -98,6 +107,7 @@ int main(void) {
     CAMERA.up = (Vector3){0.0, 1.0, 0.0};
 
     while (!WindowShouldClose()) {
+        update_scene_saving();
         update_collision_infos();
         update_input();
         update_scene();
@@ -105,7 +115,7 @@ int main(void) {
         update_camera();
         update_camera_shell();
         update_picking();
-  
+
         // Draw main editor screen
         BeginTextureMode(FULL_SCREEN);
         ClearBackground(DARKGRAY);
@@ -170,6 +180,21 @@ static EntityType get_picked_entity_type(void) {
     return PICKED_COLLISION_INFO->entity_type;
 }
 
+static void update_scene_saving(void) {
+    if (!IS_SAVE_PRESSED) return;
+
+    if (SCENE_FILE_PATH[0] == '\0') {
+        static nfdfilteritem_t filter[1] = {{"Scene", "gsc"}};
+        char* fp = save_nfd("resources/scenes", filter, 1);
+        if (fp != NULL) {
+            strcpy(SCENE_FILE_PATH, fp);
+            NFD_FreePathN(fp);
+        }
+    }
+
+    if (SCENE_FILE_PATH[0] != '\0') save_scene(SCENE_FILE_PATH);
+}
+
 static void update_collision_infos(void) {
     N_COLLISION_INFOS = 0;
 
@@ -186,7 +211,7 @@ static void update_collision_infos(void) {
     COLLISION_INFOS[N_COLLISION_INFOS++].box = GetMeshBoundingBox(CAMERA_SHELL.mesh);
 
     for (size_t i = 0; i < SCENE.board.n_items; ++i) {
-        Item *item = &SCENE.board.items[i];
+        Item* item = &SCENE.board.items[i];
         BoundingBox box = GetMeshBoundingBox(item->mesh);
         box.max = Vector3Transform(box.max, item->matrix);
         box.min = Vector3Transform(box.min, item->matrix);
@@ -202,6 +227,7 @@ static void update_input(void) {
     IS_MMB_DOWN = IsMouseButtonDown(2) && !IS_IG_INTERACTED;
     IS_LMB_PRESSED = IsMouseButtonPressed(0) && !IS_IG_INTERACTED;
     IS_SHIFT_DOWN = IsKeyDown(KEY_LEFT_SHIFT) && !IS_IG_INTERACTED;
+    IS_SAVE_PRESSED = IsKeyDown(KEY_LEFT_CONTROL) && IsKeyPressed(KEY_S);
     MOUSE_POSITION = GetMousePosition();
     MOUSE_DELTA = GetMouseDelta();
     MOUSE_WHEEL_MOVE = GetMouseWheelMove();
@@ -252,7 +278,7 @@ static void update_picking(void) {
     Ray ray = GetMouseRay(MOUSE_POSITION, CAMERA);
 
     for (size_t id = 0; id < N_COLLISION_INFOS; ++id) {
-        CollisionInfo *info = &COLLISION_INFOS[id];
+        CollisionInfo* info = &COLLISION_INFOS[id];
         BoundingBox box = info->box;
         if (info->transform) {
             Matrix mat = get_transform_matrix(*info->transform);
@@ -283,21 +309,21 @@ static void update_camera_shell(void) {
 }
 
 static void set_board_n_items(int n_items) {
-    Board *b = &SCENE.board;
+    Board* b = &SCENE.board;
 
     if (n_items < 0 || n_items > MAX_N_BOARD_ITEMS || n_items == b->n_items) return;
 
     PICKED_COLLISION_INFO = NULL;
     while (n_items < b->n_items) {
         b->n_items -= 1;
-        Item *item = &b->items[b->n_items];
+        Item* item = &b->items[b->n_items];
         UnloadMaterial(item->material);
         UnloadMesh(item->mesh);
         *item = (Item){0};
     }
 
     while (n_items > b->n_items) {
-        Item *item = &b->items[b->n_items];
+        Item* item = &b->items[b->n_items];
         item->material = LoadMaterialDefault();
         item->mesh = GenMeshPlane(1.0, 1.0, 2, 2);
         b->n_items += 1;
@@ -349,7 +375,7 @@ static void draw_imgui(void) {
         }
 
         if (ig_collapsing_header("Item", true) && get_picked_entity_type() == ITEM_TYPE) {
-            Item *item = (Item*)PICKED_COLLISION_INFO->entity;
+            Item* item = (Item*)PICKED_COLLISION_INFO->entity;
             Texture2D texture = item->material.maps[0].texture;
             int texture_id = texture.id;
 
