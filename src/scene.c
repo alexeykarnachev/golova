@@ -40,12 +40,12 @@ void load_scene(const char* file_path) {
 
         for (size_t i = 0; i < loaded.board.n_items; ++i) {
             Item* item = &SCENE.board.items[i];
+            item->material = LoadMaterialDefault();
+            item->mesh = GenMeshPlane(1.0, 1.0, 2, 2);
             if (item->name[0] != '\0') {
                 static char fp[2048];
                 sprintf(fp, "resources/items/sprites/%s.png", item->name);
-                item->material = LoadMaterialDefault();
                 item->material.maps[0].texture = LoadTexture(fp);
-                item->mesh = GenMeshPlane(1.0, 1.0, 2, 2);
             }
         }
     }

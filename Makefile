@@ -7,6 +7,11 @@ LDFLAGS=\
 	-lcimgui -lnfd \
 	$(shell pkg-config --libs gtk+-3.0)
 
+ifeq ($(DEBUG),true)
+	CFLAGS += -fsanitize=address -g
+	LDFLAGS += -fsanitize=address -g
+endif
+
 THIS_DIR=$(shell pwd)
 BIN_DIR=$(THIS_DIR)/bin
 SRC_DIR=$(THIS_DIR)/src

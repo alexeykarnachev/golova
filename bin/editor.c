@@ -16,8 +16,10 @@
 #define CIMGUI_DEFINE_ENUMS_AND_STRUCTS
 #include "cimgui.h"
 
-#define SCREEN_WIDTH 1024
-#define SCREEN_HEIGHT 768
+// #define SCREEN_WIDTH 1024
+// #define SCREEN_HEIGHT 768
+#define SCREEN_WIDTH 2560
+#define SCREEN_HEIGHT 1440
 #define MAX_N_COLLISION_INFOS 64
 
 typedef enum EntityType {
@@ -30,8 +32,9 @@ typedef enum EntityType {
 
 typedef struct CollisionInfo {
     RayCollision collision;
+    Matrix matrix;
+    Mesh mesh;
     Transform* transform;
-    BoundingBox box;
     EntityType entity_type;
     void* entity;
 } CollisionInfo;
@@ -68,6 +71,7 @@ static Transform* get_picked_transform(void);
 static void* get_picked_entity(void);
 static EntityType get_picked_entity_type(void);
 
+static void reset_camera_shell(void);
 static void update_scene_save_load(void);
 static void update_collision_infos(void);
 static void update_input(void);
@@ -78,6 +82,7 @@ static void update_gizmo(void);
 static void set_board_n_items(int n_items);
 static void draw_editor_grid(void);
 static void draw_camera_shell(void);
+static void draw_item_boxes(void);
 static void draw_imgui(void);
 
 int main(void) {
@@ -90,15 +95,10 @@ int main(void) {
     PREVIEW_SCREEN = LoadRenderTexture(SCREEN_WIDTH / 3, SCREEN_HEIGHT / 3);
     GIZMO = rgizmo_create();
 
-    CAMERA_SHELL.transform = get_default_transform();
-    CAMERA_SHELL.transform.translation = SCENE.camera.position;
-    CAMERA_SHELL.transform.rotation = QuaternionFromVector3ToVector3(
-        (Vector3){0.0, 0.0, -1.0},
-        Vector3Subtract(SCENE.camera.target, SCENE.camera.position)
-    );
-    CAMERA_SHELL.mesh = GenMeshSphere(0.2, 16, 16);
+    CAMERA_SHELL.mesh = GenMeshSphere(0.15, 16, 16);
     CAMERA_SHELL.material = LoadMaterialDefault();
     CAMERA_SHELL.material.maps[0].color = RAYWHITE;
+    reset_camera_shell();
 
     CAMERA.fovy = 60.0;
     CAMERA.position = (Vector3){5.0, 5.0, 5.0};
@@ -121,15 +121,15 @@ int main(void) {
         rlDisableBackfaceCulling();
 
         BeginMode3D(CAMERA);
+        rlSetLineWidth(2.0);
         draw_editor_grid();
         EndMode3D();
 
         BeginMode3D(CAMERA);
+        rlSetLineWidth(3.0);
         draw_scene();
-        EndMode3D();
-
-        BeginMode3D(CAMERA);
         draw_camera_shell();
+        draw_item_boxes();
         EndMode3D();
 
         BeginMode3D(CAMERA);
@@ -179,6 +179,15 @@ static EntityType get_picked_entity_type(void) {
     return PICKED_COLLISION_INFO->entity_type;
 }
 
+static void reset_camera_shell(void) {
+    CAMERA_SHELL.transform = get_default_transform();
+    CAMERA_SHELL.transform.translation = SCENE.camera.position;
+    CAMERA_SHELL.transform.rotation = QuaternionFromVector3ToVector3(
+        (Vector3){0.0, 0.0, -1.0},
+        Vector3Subtract(SCENE.camera.target, SCENE.camera.position)
+    );
+}
+
 static void update_scene_save_load(void) {
     bool is_save_pressed = IsKeyDown(KEY_LEFT_CONTROL) && IsKeyPressed(KEY_S);
     bool is_load_pressed = IsKeyDown(KEY_LEFT_CONTROL) && IsKeyPressed(KEY_O);
@@ -199,7 +208,9 @@ static void update_scene_save_load(void) {
         if (fp != NULL) {
             unload_scene();
             load_scene(fp);
-            SetWindowTitle(fp);
+            reset_camera_shell();
+            strcpy(SCENE_FILE_PATH, fp);
+            SetWindowTitle(SCENE_FILE_PATH);
         }
     }
 }
@@ -209,26 +220,24 @@ static void update_collision_infos(void) {
 
     COLLISION_INFOS[N_COLLISION_INFOS].entity_type = GOLOVA_TYPE;
     COLLISION_INFOS[N_COLLISION_INFOS].transform = &SCENE.golova.transform;
-    COLLISION_INFOS[N_COLLISION_INFOS++].box = GetMeshBoundingBox(SCENE.golova.mesh);
+    COLLISION_INFOS[N_COLLISION_INFOS++].mesh = SCENE.golova.mesh;
 
     COLLISION_INFOS[N_COLLISION_INFOS].entity_type = BOARD_TYPE;
     COLLISION_INFOS[N_COLLISION_INFOS].transform = &SCENE.board.transform;
-    COLLISION_INFOS[N_COLLISION_INFOS++].box = GetMeshBoundingBox(SCENE.board.mesh);
+    COLLISION_INFOS[N_COLLISION_INFOS++].mesh = SCENE.board.mesh;
 
     COLLISION_INFOS[N_COLLISION_INFOS].entity_type = CAMERA_SHELL_TYPE;
     COLLISION_INFOS[N_COLLISION_INFOS].transform = &CAMERA_SHELL.transform;
-    COLLISION_INFOS[N_COLLISION_INFOS++].box = GetMeshBoundingBox(CAMERA_SHELL.mesh);
+    COLLISION_INFOS[N_COLLISION_INFOS++].mesh = CAMERA_SHELL.mesh;
 
     for (size_t i = 0; i < SCENE.board.n_items; ++i) {
         Item* item = &SCENE.board.items[i];
-        BoundingBox box = GetMeshBoundingBox(item->mesh);
-        box.max = Vector3Transform(box.max, item->matrix);
-        box.min = Vector3Transform(box.min, item->matrix);
 
         COLLISION_INFOS[N_COLLISION_INFOS].entity_type = ITEM_TYPE;
         COLLISION_INFOS[N_COLLISION_INFOS].transform = NULL;
+        COLLISION_INFOS[N_COLLISION_INFOS].matrix = item->matrix;
         COLLISION_INFOS[N_COLLISION_INFOS].entity = item;
-        COLLISION_INFOS[N_COLLISION_INFOS++].box = box;
+        COLLISION_INFOS[N_COLLISION_INFOS++].mesh = item->mesh;
     }
 }
 
@@ -287,14 +296,11 @@ static void update_picking(void) {
 
     for (size_t id = 0; id < N_COLLISION_INFOS; ++id) {
         CollisionInfo* info = &COLLISION_INFOS[id];
-        BoundingBox box = info->box;
-        if (info->transform) {
-            Matrix mat = get_transform_matrix(*info->transform);
-            box.max = Vector3Transform(box.max, mat);
-            box.min = Vector3Transform(box.min, mat);
-        }
 
-        info->collision = GetRayCollisionBox(ray, box);
+        Matrix matrix;
+        matrix = info->transform ? get_transform_matrix(*info->transform) : info->matrix;
+        info->collision = GetRayCollisionMesh(ray, info->mesh, matrix);
+
         if (!info->collision.hit) continue;
 
         if (!PICKED_COLLISION_INFO) {
@@ -339,7 +345,6 @@ static void set_board_n_items(int n_items) {
 }
 
 static void draw_editor_grid(void) {
-    rlSetLineWidth(2.0);
     DrawGrid(10.0, 5.0);
     float d = 25.0f;
     DrawLine3D((Vector3){-d, 0.0f, 0.0f}, (Vector3){d, 0.0f, 0.0f}, RED);
@@ -351,12 +356,23 @@ static void draw_editor_grid(void) {
 static void draw_camera_shell(void) {
     draw_mesh_t(CAMERA_SHELL.transform, CAMERA_SHELL.material, CAMERA_SHELL.mesh);
 
-    rlSetLineWidth(5.0);
     Vector3 start = SCENE.camera.position;
     Vector3 target = SCENE.camera.target;
     Vector3 dir = Vector3Normalize(Vector3Subtract(target, start));
-    Vector3 end = Vector3Add(start, Vector3Scale(dir, 1.0));
+    Vector3 end = Vector3Add(start, Vector3Scale(dir, 0.8));
     DrawLine3D(start, end, RAYWHITE);
+}
+
+static void draw_item_boxes(void) {
+    for (size_t i = 0; i < SCENE.board.n_items; ++i) {
+        Item* item = &SCENE.board.items[i];
+        BoundingBox box = GetMeshBoundingBox(item->mesh);
+        Color color = item->is_correct ? GREEN : RED;
+        rlPushMatrix();
+        rlMultMatrixf(MatrixToFloat(item->matrix));
+        DrawBoundingBox(box, color);
+        rlPopMatrix();
+    }
 }
 
 static void draw_imgui(void) {
