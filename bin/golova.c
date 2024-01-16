@@ -25,7 +25,7 @@ typedef enum GameState {
      : (state == GAME_OVER)        ? "GAME_OVER" \
                                    : "UNKNOWN")
 
-static float GAME_STATE_TO_TIME[] = {4.0, 4.0, 0.0};
+static float GAME_STATE_TO_TIME[] = {40.0, 4.0, 0.0};
 
 static GameState GAME_STATE;
 static GameState NEXT_STATE;
@@ -85,6 +85,51 @@ static void update_game(void) {
     // Update game state
     if (GAME_STATE == PLAYER_IS_PICKING) {
 
+        // Handle mouse input and update item states
+        bool is_hit_any = false;
+        for (size_t i = 0; i < SCENE.board.n_items; ++i) {
+            Item* item = &SCENE.board.items[i];
+
+            // Don't update dead items
+            if (item->is_dead) continue;
+
+            // Collide mouse and item meshes
+            RayCollision collision = GetRayCollisionMesh(
+                MOUSE_RAY, SCENE.board.item_mesh, item->matrix
+            );
+
+            bool is_hit = collision.hit;
+            is_hit_any |= is_hit;
+            if (is_hit && IS_LMB_PRESSED) {
+                // Unpick previous item and pick the new one
+                if (PICKED_ITEM && PICKED_ITEM != item) {
+                    PICKED_ITEM->state = ITEM_COLD;
+                    PICKED_ITEM = item;
+                    PICKED_ITEM->state = ITEM_ACTIVE;
+                    // Unpick the item
+                } else if (PICKED_ITEM) {
+                    PICKED_ITEM->state = ITEM_COLD;
+                    PICKED_ITEM = NULL;
+                    // Pick the item
+                } else {
+                    PICKED_ITEM = item;
+                    PICKED_ITEM->state = ITEM_ACTIVE;
+                }
+            } else if (is_hit) {
+                // Heat up (or stay active) the item
+                item->state = MAX(item->state, ITEM_HOT);
+            } else if (item->state == ITEM_HOT) {
+                // Cool down the hot item
+                item->state = ITEM_COLD;
+            }
+        }
+
+        // Unpick when clicked on empty space
+        if (!is_hit_any && IS_LMB_PRESSED && PICKED_ITEM) {
+            PICKED_ITEM->state = ITEM_COLD;
+            PICKED_ITEM = NULL;
+        }
+
         // PLAYER_IS_PICKING state is over
         if (TIME_REMAINING <= 0.0) {
             NEXT_STATE = GOLOVA_IS_EATING;
@@ -99,35 +144,14 @@ static void update_game(void) {
 
             PICKED_ITEM->state = ITEM_DYING;
         }
-
-        // Unpick item if lmb pressed
-        if (IS_LMB_PRESSED && PICKED_ITEM) {
-            PICKED_ITEM->state = ITEM_COLD;
-            PICKED_ITEM = NULL;
-        }
-
-        // Handle mouse input and update item states
-        for (size_t i = 0; i < SCENE.board.n_items; ++i) {
-            Item* item = &SCENE.board.items[i];
-            if (item->is_dead) continue;
-            RayCollision collision = GetRayCollisionMesh(
-                MOUSE_RAY, SCENE.board.item_mesh, item->matrix
-            );
-
-            bool is_hit = collision.hit;
-            if (is_hit && IS_LMB_PRESSED) {
-                if (PICKED_ITEM) PICKED_ITEM->state = ITEM_COLD;
-                item->state = ITEM_ACTIVE;
-                PICKED_ITEM = item;
-            } else if (is_hit) {
-                item->state = MAX(item->state, ITEM_HOT);
-            } else if (item->state == ITEM_HOT) {
-                item->state = ITEM_COLD;
-            }
-        }
     }
 
     if (GAME_STATE == GOLOVA_IS_EATING) {
+        // Cool down all non-dying items when golova is eating
+        for (size_t i = 0; i < SCENE.board.n_items; ++i) {
+            Item* item = &SCENE.board.items[i];
+            if (item->state != ITEM_DYING) item->state = ITEM_COLD;
+        }
 
         // GOLOVA_IS_EATING state is over
         if (TIME_REMAINING <= 0.0) {
@@ -144,12 +168,6 @@ static void update_game(void) {
             } else {
                 NEXT_STATE = PLAYER_IS_PICKING;
             }
-        }
-
-        // Cool down all non-dying items when golova is eating
-        for (size_t i = 0; i < SCENE.board.n_items; ++i) {
-            Item* item = &SCENE.board.items[i];
-            if (item->state != ITEM_DYING) item->state = ITEM_COLD;
         }
     }
 }
