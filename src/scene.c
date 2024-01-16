@@ -56,7 +56,6 @@ void load_scene(const char* file_path) {
             Item* item = &SCENE.board.items[i];
             fread(&item->matrix, sizeof(Matrix), 1, f);
             fread(&item->is_correct, sizeof(bool), 1, f);
-            fread(&item->is_alive, sizeof(bool), 1, f);
             fread(&item->name, sizeof(item->name), 1, f);
 
             if (item->name[0] != '\0') {
@@ -110,7 +109,6 @@ void save_scene(const char* file_path) {
         Item* item = &SCENE.board.items[i];
         fwrite(&item->matrix, sizeof(Matrix), 1, f);
         fwrite(&item->is_correct, sizeof(bool), 1, f);
-        fwrite(&item->is_alive, sizeof(bool), 1, f);
         fwrite(&item->name, sizeof(item->name), 1, f);
     }
 
@@ -143,12 +141,14 @@ void draw_scene(void) {
     Shader item_shader = SCENE.board.item_material.shader;
     for (size_t i = 0; i < SCENE.board.n_items; ++i) {
         Item* item = &SCENE.board.items[i];
+        if (item->is_dead) continue;
+
         SCENE.board.item_material.maps[0].texture = item->texture;
-        int u_is_hot = item->is_hot;
+        int u_state = item->state;
         SetShaderValue(
             item_shader,
-            GetShaderLocation(item_shader, "u_is_hot"),
-            &u_is_hot,
+            GetShaderLocation(item_shader, "u_state"),
+            &u_state,
             SHADER_UNIFORM_INT
         );
         draw_mesh_m(item->matrix, SCENE.board.item_material, SCENE.board.item_mesh);

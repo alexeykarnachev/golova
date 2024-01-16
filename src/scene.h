@@ -13,13 +13,27 @@ typedef struct Golova {
     Mesh mesh;
 } Golova;
 
+typedef enum ItemState {
+    ITEM_COLD = 0,
+    ITEM_HOT,
+    ITEM_ACTIVE,
+    ITEM_DYING,
+} ItemState;
+
+#define ITEM_STATE_TO_NAME(state) \
+    ((state == ITEM_COLD)     ? "ITEM_COLD" \
+     : (state == ITEM_HOT)    ? "ITEM_HOT" \
+     : (state == ITEM_ACTIVE) ? "ITEM_ACTIVE" \
+     : (state == ITEM_DYING)  ? "ITEM_DYING" \
+                              : "UNKNOWN")
+
 typedef struct Item {
     Texture2D texture;
     Matrix matrix;
 
     bool is_correct;
-    bool is_alive;
-    bool is_hot;
+    bool is_dead;
+    ItemState state;
 
     char name[MAX_ITEM_NAME_LENGTH];
 } Item;
