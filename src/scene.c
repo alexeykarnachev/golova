@@ -65,6 +65,8 @@ void load_scene(const char* file_path) {
                 item->material.maps[0].texture = LoadTexture(fp);
             }
         }
+
+        fclose(f);
     }
 
     // -------------------------------------------------------------------
@@ -111,6 +113,8 @@ void save_scene(const char* file_path) {
     }
 
     TraceLog(LOG_INFO, "Scene saved: %s", file_path);
+
+    fclose(f);
 }
 
 void unload_scene(void) {
