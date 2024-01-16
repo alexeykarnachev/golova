@@ -22,6 +22,8 @@ void load_scene(const char* file_path) {
     SCENE.board.item_elevation = 0.5;
     SCENE.board.board_scale = 0.7;
     SCENE.board.item_scale = 0.2;
+    SCENE.board.item_material = LoadMaterialDefault();
+    SCENE.board.item_mesh = GenMeshPlane(1.0, 1.0, 2, 2);
 
     // Camera
     SCENE.camera.fovy = 60.0;
@@ -57,12 +59,10 @@ void load_scene(const char* file_path) {
             fread(&item->is_alive, sizeof(bool), 1, f);
             fread(&item->name, sizeof(item->name), 1, f);
 
-            item->material = LoadMaterialDefault();
-            item->mesh = GenMeshPlane(1.0, 1.0, 2, 2);
             if (item->name[0] != '\0') {
                 static char fp[2048];
                 sprintf(fp, "resources/items/sprites/%s.png", item->name);
-                item->material.maps[0].texture = LoadTexture(fp);
+                item->texture = LoadTexture(fp);
             }
         }
 
@@ -82,6 +82,8 @@ void load_scene(const char* file_path) {
     SCENE.board.material = LoadMaterialDefault();
     SCENE.board.material.shader = LoadShader(0, "resources/shaders/board.frag");
     SCENE.board.mesh = GenMeshPlane(1.0, 1.0, 2, 2);
+    SCENE.board.item_material = LoadMaterialDefault();
+    SCENE.board.item_material.shader = LoadShader(0, "resources/shaders/item.frag");
 }
 
 void save_scene(const char* file_path) {
@@ -118,14 +120,15 @@ void save_scene(const char* file_path) {
 }
 
 void unload_scene(void) {
-    UnloadMaterial(SCENE.golova.material);
     UnloadMesh(SCENE.golova.mesh);
-    UnloadMaterial(SCENE.board.material);
     UnloadMesh(SCENE.board.mesh);
+    UnloadMesh(SCENE.board.item_mesh);
+    UnloadMaterial(SCENE.golova.material);
+    UnloadMaterial(SCENE.board.material);
+    UnloadMaterial(SCENE.board.item_material);
     for (size_t i = 0; i < SCENE.board.n_items; ++i) {
         Item* item = &SCENE.board.items[i];
-        UnloadMaterial(item->material);
-        UnloadMesh(item->mesh);
+        UnloadTexture(item->texture);
     }
 }
 
@@ -137,9 +140,18 @@ void draw_scene(void) {
     draw_mesh_t(SCENE.golova.transform, SCENE.golova.material, SCENE.golova.mesh);
     draw_mesh_t(SCENE.board.transform, SCENE.board.material, SCENE.board.mesh);
 
+    Shader item_shader = SCENE.board.item_material.shader;
     for (size_t i = 0; i < SCENE.board.n_items; ++i) {
-        Item item = SCENE.board.items[i];
-        draw_mesh_m(item.matrix, item.material, item.mesh);
+        Item* item = &SCENE.board.items[i];
+        SCENE.board.item_material.maps[0].texture = item->texture;
+        int u_is_hot = item->is_hot;
+        SetShaderValue(
+            item_shader,
+            GetShaderLocation(item_shader, "u_is_hot"),
+            &u_is_hot,
+            SHADER_UNIFORM_INT
+        );
+        draw_mesh_m(item->matrix, SCENE.board.item_material, SCENE.board.item_mesh);
     }
 }
 

@@ -1,5 +1,6 @@
 #include "../src/scene.h"
 #include "raylib.h"
+#include <stdio.h>
 
 // #define SCREEN_WIDTH 1024
 // #define SCREEN_HEIGHT 768
@@ -14,6 +15,15 @@ int main(void) {
 
     while (!WindowShouldClose()) {
         update_scene();
+
+        Ray ray = GetMouseRay(GetMousePosition(), SCENE.camera);
+        for (size_t i = 0; i < SCENE.board.n_items; ++i) {
+            Item* item = &SCENE.board.items[i];
+            RayCollision collision = GetRayCollisionMesh(
+                ray, SCENE.board.item_mesh, item->matrix
+            );
+            item->is_hot = collision.hit;
+        }
 
         BeginDrawing();
         ClearBackground(BLACK);

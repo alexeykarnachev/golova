@@ -14,12 +14,12 @@ typedef struct Golova {
 } Golova;
 
 typedef struct Item {
+    Texture2D texture;
     Matrix matrix;
-    Material material;
-    Mesh mesh;
 
     bool is_correct;
     bool is_alive;
+    bool is_hot;
 
     char name[MAX_ITEM_NAME_LENGTH];
 } Item;
@@ -37,6 +37,8 @@ typedef struct Board {
     float item_scale;
     float item_elevation;
 
+    Material item_material;
+    Mesh item_mesh;
     int n_items;
     Item items[MAX_N_BOARD_ITEMS];
 } Board;

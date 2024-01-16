@@ -236,7 +236,7 @@ static void update_collision_infos(void) {
         COLLISION_INFOS[N_COLLISION_INFOS].transform = NULL;
         COLLISION_INFOS[N_COLLISION_INFOS].matrix = item->matrix;
         COLLISION_INFOS[N_COLLISION_INFOS].entity = item;
-        COLLISION_INFOS[N_COLLISION_INFOS++].mesh = item->mesh;
+        COLLISION_INFOS[N_COLLISION_INFOS++].mesh = SCENE.board.item_mesh;
     }
 }
 
@@ -328,14 +328,11 @@ static void set_board_values(int n_items, int n_hits_required, int n_misses_allo
     while (n_items < b->n_items) {
         b->n_items -= 1;
         Item* item = &b->items[b->n_items];
-        UnloadMaterial(item->material);
-        UnloadMesh(item->mesh);
+        UnloadTexture(item->texture);
         *item = (Item){0};
     }
     while (n_items > b->n_items) {
         Item* item = &b->items[b->n_items];
-        item->material = LoadMaterialDefault();
-        item->mesh = GenMeshPlane(1.0, 1.0, 2, 2);
         b->n_items += 1;
     }
 
@@ -366,9 +363,9 @@ static void draw_camera_shell(void) {
 }
 
 static void draw_item_boxes(void) {
+    BoundingBox box = GetMeshBoundingBox(SCENE.board.item_mesh);
     for (size_t i = 0; i < SCENE.board.n_items; ++i) {
         Item* item = &SCENE.board.items[i];
-        BoundingBox box = GetMeshBoundingBox(item->mesh);
         Color color = item->is_correct ? GREEN : RED;
         rlPushMatrix();
         rlMultMatrixf(MatrixToFloat(item->matrix));
@@ -408,7 +405,7 @@ static void draw_imgui(void) {
 
         if (ig_collapsing_header("Item", true) && get_picked_entity_type() == ITEM_TYPE) {
             Item* item = get_picked_entity();
-            Texture2D texture = item->material.maps[0].texture;
+            Texture2D texture = item->texture;
             int texture_id = texture.id;
 
             bool is_clicked = igImageButton(
@@ -426,11 +423,10 @@ static void draw_imgui(void) {
                 char* fp = open_nfd("resources/items/sprites", filter, 1);
                 if (fp != NULL) {
                     get_file_name(item->name, fp, true);
-                    if (IsMaterialReady(item->material)) {
-                        UnloadMaterial(item->material);
+                    if (IsTextureReady(item->texture)) {
+                        UnloadTexture(item->texture);
                     }
-                    item->material = LoadMaterialDefault();
-                    item->material.maps[0].texture = LoadTexture(fp);
+                    item->texture = LoadTexture(fp);
                     NFD_FreePathN(fp);
                 }
             }
