@@ -50,7 +50,7 @@ fail:
     return NULL;
 }
 
-char** get_file_names_in_dir(char* path, int* n_file_names) {
+char** get_file_names_in_dir(const char* path, int* n_file_names) {
     DIR* dir = opendir(path);
     if (dir == NULL) {
         TraceLog(LOG_ERROR, "Failed to open directory %s", path);
@@ -73,7 +73,7 @@ char** get_file_names_in_dir(char* path, int* n_file_names) {
     return file_names;
 }
 
-void get_file_name(char* dst, char* path, bool strip_ext) {
+void get_file_name(char* dst, const char* path, bool strip_ext) {
     // Find the last occurrence of the path separator ('/' or '\') to locate the
     // start of the file name
     const char* file_name_start = strrchr(path, '/');

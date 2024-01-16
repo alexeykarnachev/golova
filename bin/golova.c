@@ -1,6 +1,7 @@
 #include "../src/cimgui_utils.h"
 #include "../src/math.h"
 #include "../src/scene.h"
+#include "../src/utils.h"
 #include "raylib.h"
 #include "raymath.h"
 #include <stdio.h>
@@ -25,7 +26,12 @@ typedef enum GameState {
      : (state == GAME_OVER)        ? "GAME_OVER" \
                                    : "UNKNOWN")
 
-static float GAME_STATE_TO_TIME[] = {40.0, 4.0, 0.0};
+static float GAME_STATE_TO_TIME[] = {1.0, 1.0, 0.0};
+
+static char* SCENES_DIR = "resources/scenes";
+static int CURR_SCENE_ID;
+static char** SCENE_FILE_NAMES;
+static int N_SCENES;
 
 static GameState GAME_STATE;
 static GameState NEXT_STATE;
@@ -37,18 +43,19 @@ static Ray MOUSE_RAY;
 
 static Item* PICKED_ITEM;
 
+static void load_curr_scene(void);
 static void update_game(void);
+static void draw_game_imgui(void);
 static void draw_imgui(void);
 
 int main(void) {
-    InitWindow(SCREEN_WIDTH, SCREEN_HEIGHT, "Editor");
+    InitWindow(SCREEN_WIDTH, SCREEN_HEIGHT, "Golova");
     SetTargetFPS(60);
 
-    load_scene("resources/scenes/tmp.scn");
-    load_imgui();
+    SCENE_FILE_NAMES = get_file_names_in_dir(SCENES_DIR, &N_SCENES);
 
-    GAME_STATE = PLAYER_IS_PICKING;
-    TIME_REMAINING = GAME_STATE_TO_TIME[GAME_STATE];
+    load_curr_scene();
+    load_imgui();
 
     while (!WindowShouldClose()) {
         update_scene();
@@ -56,9 +63,12 @@ int main(void) {
 
         BeginDrawing();
         ClearBackground(BLACK);
+
         BeginMode3D(SCENE.camera);
         draw_scene();
         EndMode3D();
+
+        draw_game_imgui();
 
         begin_imgui();
         draw_imgui();
@@ -68,6 +78,17 @@ int main(void) {
     }
 
     return 0;
+}
+
+static void load_curr_scene(void) {
+    static char fp[2048];
+    sprintf(fp, "%s/%s", SCENES_DIR, SCENE_FILE_NAMES[CURR_SCENE_ID]);
+
+    unload_scene();
+    load_scene(fp);
+
+    GAME_STATE = PLAYER_IS_PICKING;
+    TIME_REMAINING = GAME_STATE_TO_TIME[GAME_STATE];
 }
 
 static void update_game(void) {
@@ -144,9 +165,7 @@ static void update_game(void) {
 
             PICKED_ITEM->state = ITEM_DYING;
         }
-    }
-
-    if (GAME_STATE == GOLOVA_IS_EATING) {
+    } else if (GAME_STATE == GOLOVA_IS_EATING) {
         // Cool down all non-dying items when golova is eating
         for (size_t i = 0; i < SCENE.board.n_items; ++i) {
             Item* item = &SCENE.board.items[i];
@@ -169,14 +188,48 @@ static void update_game(void) {
                 NEXT_STATE = PLAYER_IS_PICKING;
             }
         }
+    } else if (GAME_STATE == GAME_OVER) {
+    }
+}
+
+static void draw_game_imgui(void) {
+    int screen_height = GetScreenHeight();
+    int screen_width = GetScreenWidth();
+
+    if (GAME_STATE == GAME_OVER) {
+
+        const char* text;
+        Color color;
+        if (SCENE.board.n_misses_allowed < 0) {
+            text = "Golova feels bad...";
+            color = MAROON;
+        } else {
+            text = "Golova is happy...";
+            color = GREEN;
+        }
+
+        int font_size = 100;
+        int text_width = MeasureText(text, font_size);
+        int x = (screen_width - text_width) / 2;
+        int y = screen_height / 2 - font_size;
+        DrawText(text, x, y, font_size, color);
+
+        text = SCENE.board.rule;
+        font_size = 40;
+        text_width = MeasureText(text, font_size);
+        x = (screen_width - text_width) / 2;
+        y = y - font_size * 1.2;
+        DrawText(text, x, y, font_size, RAYWHITE);
     }
 }
 
 static void draw_imgui(void) {
     ig_fix_window_top_left();
     if (igBegin("Debug info", NULL, GHOST_WINDOW_FLAGS)) {
+        igText("scene_file_name: %s", SCENE_FILE_NAMES[CURR_SCENE_ID]);
         igText("GAME_STATE: %s", GAME_STATE_TO_NAME(GAME_STATE));
         igText("TIME_REMAINING: %.2f", TIME_REMAINING);
+        igText("rule: %s", SCENE.board.rule);
         igText("n_hits_required: %d", SCENE.board.n_hits_required);
         igText("n_misses_allowed: %d", SCENE.board.n_misses_allowed);
 
