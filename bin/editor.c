@@ -191,7 +191,7 @@ static void reset_camera_shell(void) {
 static void update_scene_save_load(void) {
     bool is_save_pressed = IsKeyDown(KEY_LEFT_CONTROL) && IsKeyPressed(KEY_S);
     bool is_load_pressed = IsKeyDown(KEY_LEFT_CONTROL) && IsKeyPressed(KEY_O);
-    static nfdfilteritem_t filter[1] = {{"Scene", "gsc"}};
+    static nfdfilteritem_t filter[1] = {{"Scene", "scn"}};
 
     if (is_save_pressed) {
         if (SCENE_FILE_PATH[0] == '\0' || IsKeyDown(KEY_LEFT_SHIFT)) {

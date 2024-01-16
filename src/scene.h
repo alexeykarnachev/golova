@@ -14,13 +14,14 @@ typedef struct Golova {
 } Golova;
 
 typedef struct Item {
-    char name[MAX_ITEM_NAME_LENGTH];
-    bool is_correct;
-    bool is_alive;
-
     Matrix matrix;
     Material material;
     Mesh mesh;
+
+    bool is_correct;
+    bool is_alive;
+
+    char name[MAX_ITEM_NAME_LENGTH];
 } Item;
 
 typedef struct Board {
@@ -28,18 +29,16 @@ typedef struct Board {
     Material material;
     Mesh mesh;
 
-    int n_misses_allowed;
-    int n_hits_required;
-
-    int n_items;
-    Item items[MAX_N_BOARD_ITEMS];
-
     char rule[MAX_RULE_LENGTH];
 
-    // Drawing
+    int n_misses_allowed;
+    int n_hits_required;
     float board_scale;
     float item_scale;
     float item_elevation;
+
+    int n_items;
+    Item items[MAX_N_BOARD_ITEMS];
 } Board;
 
 typedef struct Scene {

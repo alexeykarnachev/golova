@@ -32,14 +32,31 @@ void load_scene(const char* file_path) {
     // -------------------------------------------------------------------
     // Update entities from the scene save file
     if (file_path) {
-        int size;
-        Scene loaded = *(Scene*)LoadFileData(file_path, &size);
-        SCENE.golova = loaded.golova;
-        SCENE.board = loaded.board;
-        SCENE.camera = loaded.camera;
+        FILE* f = fopen(file_path, "rb");
 
-        for (size_t i = 0; i < loaded.board.n_items; ++i) {
+        // Camera
+        fread(&SCENE.camera, sizeof(Camera3D), 1, f);
+
+        // Golova
+        fread(&SCENE.golova.transform, sizeof(Transform), 1, f);
+
+        // Board
+        fread(&SCENE.board.transform, sizeof(Transform), 1, f);
+        fread(&SCENE.board.rule, sizeof(SCENE.board.rule), 1, f);
+        fread(&SCENE.board.n_misses_allowed, sizeof(int), 1, f);
+        fread(&SCENE.board.n_hits_required, sizeof(int), 1, f);
+        fread(&SCENE.board.board_scale, sizeof(float), 1, f);
+        fread(&SCENE.board.item_scale, sizeof(float), 1, f);
+        fread(&SCENE.board.item_elevation, sizeof(float), 1, f);
+        fread(&SCENE.board.n_items, sizeof(int), 1, f);
+
+        for (size_t i = 0; i < SCENE.board.n_items; ++i) {
             Item* item = &SCENE.board.items[i];
+            fread(&item->matrix, sizeof(Matrix), 1, f);
+            fread(&item->is_correct, sizeof(bool), 1, f);
+            fread(&item->is_alive, sizeof(bool), 1, f);
+            fread(&item->name, sizeof(item->name), 1, f);
+
             item->material = LoadMaterialDefault();
             item->mesh = GenMeshPlane(1.0, 1.0, 2, 2);
             if (item->name[0] != '\0') {
@@ -66,7 +83,33 @@ void load_scene(const char* file_path) {
 }
 
 void save_scene(const char* file_path) {
-    SaveFileData(file_path, &SCENE, sizeof(Scene));
+    FILE* f = fopen(file_path, "wb");
+
+    // Camera
+    fwrite(&SCENE.camera, sizeof(Camera3D), 1, f);
+
+    // Golova
+    fwrite(&SCENE.golova.transform, sizeof(Transform), 1, f);
+
+    // Board
+    fwrite(&SCENE.board.transform, sizeof(Transform), 1, f);
+    fwrite(&SCENE.board.rule, sizeof(SCENE.board.rule), 1, f);
+    fwrite(&SCENE.board.n_misses_allowed, sizeof(int), 1, f);
+    fwrite(&SCENE.board.n_hits_required, sizeof(int), 1, f);
+    fwrite(&SCENE.board.board_scale, sizeof(float), 1, f);
+    fwrite(&SCENE.board.item_scale, sizeof(float), 1, f);
+    fwrite(&SCENE.board.item_elevation, sizeof(float), 1, f);
+    fwrite(&SCENE.board.n_items, sizeof(int), 1, f);
+
+    // Items
+    for (size_t i = 0; i < SCENE.board.n_items; ++i) {
+        Item* item = &SCENE.board.items[i];
+        fwrite(&item->matrix, sizeof(Matrix), 1, f);
+        fwrite(&item->is_correct, sizeof(bool), 1, f);
+        fwrite(&item->is_alive, sizeof(bool), 1, f);
+        fwrite(&item->name, sizeof(item->name), 1, f);
+    }
+
     TraceLog(LOG_INFO, "Scene saved: %s", file_path);
 }
 
