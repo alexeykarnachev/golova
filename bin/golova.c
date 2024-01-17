@@ -22,8 +22,20 @@ typedef enum GameState {
     GAME_OVER = 3,
 } GameState;
 
+typedef enum PauseState {
+    NOT_PAUSED = 0,
+    MAIN_PAUSE = 1,
+    OPTIONS_PAUSE = 2,
+} PauseState;
+
 static RenderTexture2D SCREEN;
 static Shader POSTFX_SHADER;
+
+#define PAUSE_STATE_TO_NAME(state) \
+    ((state == NOT_PAUSED)      ? "NOT_PAUSED" \
+     : (state == MAIN_PAUSE)    ? "MAIN_PAUSE" \
+     : (state == OPTIONS_PAUSE) ? "OPTIONS_PAUSE" \
+                                : "UNKNOWN")
 
 #define GAME_STATE_TO_NAME(state) \
     ((state == PLAYER_IS_PICKING)  ? "PLAYER_IS_PICKING" \
@@ -39,6 +51,7 @@ static int CURR_SCENE_ID;
 static char** SCENE_FILE_NAMES;
 static int N_SCENES;
 
+static PauseState PAUSE_STATE;
 static GameState GAME_STATE;
 static GameState NEXT_STATE;
 static float TIME_REMAINING;
@@ -46,6 +59,7 @@ static bool IS_NEXT_SCENE;
 static bool IS_EXIT_GAME;
 
 static Vector2 MOUSE_POSITION;
+static bool IS_ESCAPE_PRESSED;
 static bool IS_LMB_PRESSED;
 static bool IS_ALTF4_PRESSED;
 static Ray MOUSE_RAY;
@@ -113,13 +127,18 @@ static void load_curr_scene(void) {
 
 static void update_game(void) {
     MOUSE_POSITION = GetMousePosition();
+    IS_ESCAPE_PRESSED = IsKeyPressed(KEY_ESCAPE);
     IS_LMB_PRESSED = IsMouseButtonPressed(0);
     IS_ALTF4_PRESSED = IsKeyDown(KEY_LEFT_ALT) && IsKeyPressed(KEY_F4);
     MOUSE_RAY = GetMouseRay(MOUSE_POSITION, SCENE.camera);
-    TIME_REMAINING -= GetFrameTime();
 
-    if ((WindowShouldClose() || IS_ALTF4_PRESSED) && !IsKeyPressed(KEY_ESCAPE)) {
+    if ((WindowShouldClose() || IS_ALTF4_PRESSED) && !IS_ESCAPE_PRESSED) {
         IS_EXIT_GAME = true;
+    }
+
+    if (IS_ESCAPE_PRESSED) {
+        if (PAUSE_STATE == NOT_PAUSED) PAUSE_STATE = MAIN_PAUSE;
+        else PAUSE_STATE = NOT_PAUSED;
     }
 
     if (IS_NEXT_SCENE) {
@@ -130,11 +149,15 @@ static void update_game(void) {
 
     if (NEXT_STATE != GAME_STATE) {
         GAME_STATE = NEXT_STATE;
+        PAUSE_STATE = NOT_PAUSED;
         TIME_REMAINING = GAME_STATE_TO_TIME[GAME_STATE];
     }
 
     // -------------------------------------------------------------------
     // Update game state
+    if (PAUSE_STATE > 0) return;
+    TIME_REMAINING -= GetFrameTime();
+
     if (GAME_STATE == PLAYER_IS_PICKING) {
 
         // Handle mouse input and update item states
@@ -226,10 +249,12 @@ static void update_game(void) {
 
 static void draw_postfx(void) {
     BeginShaderMode(POSTFX_SHADER);
+    int is_blured = PAUSE_STATE > 0 || GAME_STATE == SCENE_OVER
+                    || GAME_STATE == GAME_OVER;
     SetShaderValue(
         POSTFX_SHADER,
-        GetShaderLocation(POSTFX_SHADER, "u_game_state"),
-        &GAME_STATE,
+        GetShaderLocation(POSTFX_SHADER, "u_is_blured"),
+        &is_blured,
         SHADER_UNIFORM_INT
     );
     DrawTextureRec(
@@ -245,11 +270,47 @@ static void draw_ggui(void) {
     int screen_height = GetScreenHeight();
     int screen_width = GetScreenWidth();
 
-    if (GAME_STATE == SCENE_OVER || GAME_STATE == GAME_OVER) {
+    const char* text;
+    Color color;
+    Rectangle rec;
 
+    if (PAUSE_STATE == MAIN_PAUSE) {
+        int font_size = 60;
+
+        const char* resume_text = "Resume";
+        Rectangle resume_rec = get_text_rec(resume_text, 0, font_size);
+
+        const char* options_text = "Options";
+        Rectangle options_rec = get_text_rec(options_text, 0, font_size);
+
+        const char* quit_text = "Quit";
+        Rectangle quit_rec = get_text_rec(quit_text, 0, font_size);
+
+        int gap = 10;
+        int pad_x = 50;
+        int pad_y = 100;
+
+        int height = pad_y + resume_rec.height + gap + options_rec.height + gap
+                     + quit_rec.height + pad_y;
+        int width = pad_x + options_rec.width + pad_x;
+        int x = (screen_width - width) / 2;
+        int y = (screen_height - height) / 2;
+        rec = (Rectangle){x, y, width, height};
+        DrawRectangleRounded(rec, 0.2, 16, (Color){255, 255, 255, 180});
+
+        x = (rec.width - resume_rec.width) / 2 + rec.x;
+        y += pad_y;
+        DrawText(resume_text, x, y, resume_rec.height, BLACK);
+        y += resume_rec.height + gap;
+
+        x = (rec.width - options_rec.width) / 2 + rec.x;
+        DrawText(options_text, x, y, options_rec.height, BLACK);
+        y += options_rec.height + gap;
+
+        x = (rec.width - quit_rec.width) / 2 + rec.x;
+        DrawText(quit_text, x, y, quit_rec.height, BLACK);
+    } else if (GAME_STATE == SCENE_OVER || GAME_STATE == GAME_OVER) {
         // Main message
-        const char* text;
-        Color color;
         if (SCENE.board.n_misses_allowed < 0) {
             text = "Golova feels bad...";
             color = MAROON;
@@ -259,7 +320,7 @@ static void draw_ggui(void) {
         }
 
         int y = screen_height / 2 - 100;
-        Rectangle rec = get_text_rec(text, y, 100);
+        rec = get_text_rec(text, y, 100);
         DrawText(text, rec.x, rec.y, rec.height, color);
 
         // Board rule
@@ -286,8 +347,6 @@ Rectangle get_text_rec(const char* text, int y, int font_size) {
     int screen_width = GetScreenWidth();
     int text_width = MeasureText(text, font_size);
     int x = (screen_width - text_width) / 2;
-    // DrawText(text, x, y, font_size, color);
-
     Rectangle rec = {x, y, text_width, font_size};
     return rec;
 }
@@ -297,6 +356,7 @@ static void draw_imgui(void) {
     if (igBegin("Debug info", NULL, GHOST_WINDOW_FLAGS)) {
         igText("scene_file_name: %s", SCENE_FILE_NAMES[CURR_SCENE_ID]);
         igText("GAME_STATE: %s", GAME_STATE_TO_NAME(GAME_STATE));
+        igText("PAUSE_STATE: %s", PAUSE_STATE_TO_NAME(PAUSE_STATE));
         igText("TIME_REMAINING: %.2f", TIME_REMAINING);
         igText("rule: %s", SCENE.board.rule);
         igText("n_hits_required: %d", SCENE.board.n_hits_required);
