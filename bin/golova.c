@@ -28,6 +28,19 @@ typedef enum PauseState {
     OPTIONS_PAUSE = 2,
 } PauseState;
 
+typedef enum Pivot {
+    LEFT_TOP,
+    CENTER_TOP,
+    CENTER_CENTER,
+    CENTER_BOT,
+} Pivot;
+
+typedef struct Position {
+    int x;
+    int y;
+    Pivot pivot;
+} Position;
+
 static RenderTexture2D SCREEN;
 static Shader POSTFX_SHADER;
 
@@ -52,8 +65,9 @@ static char** SCENE_FILE_NAMES;
 static int N_SCENES;
 
 static PauseState PAUSE_STATE;
+static PauseState NEXT_PAUSE_STATE;
 static GameState GAME_STATE;
-static GameState NEXT_STATE;
+static GameState NEXT_GAME_STATE;
 static float TIME_REMAINING;
 static bool IS_NEXT_SCENE;
 static bool IS_EXIT_GAME;
@@ -71,7 +85,10 @@ static void update_game(void);
 static void draw_postfx(void);
 static void draw_ggui(void);
 static void draw_imgui(void);
-Rectangle get_text_rec(const char* text, int y, int font_size);
+
+static bool ggui_button(Position pos, const char* text, int font_size);
+static Rectangle ggui_get_rec(Position pos, int width, int height);
+static void ggui_text(Position pos, const char* text, int font_size, Color color);
 
 int main(void) {
     InitWindow(SCREEN_WIDTH, SCREEN_HEIGHT, "Golova");
@@ -121,7 +138,7 @@ static void load_curr_scene(void) {
     unload_scene();
     load_scene(fp);
 
-    NEXT_STATE = PLAYER_IS_PICKING;
+    NEXT_GAME_STATE = PLAYER_IS_PICKING;
     TIME_REMAINING = GAME_STATE_TO_TIME[GAME_STATE];
 }
 
@@ -137,8 +154,8 @@ static void update_game(void) {
     }
 
     if (IS_ESCAPE_PRESSED) {
-        if (PAUSE_STATE == NOT_PAUSED) PAUSE_STATE = MAIN_PAUSE;
-        else PAUSE_STATE = NOT_PAUSED;
+        if (PAUSE_STATE == NOT_PAUSED) NEXT_PAUSE_STATE = MAIN_PAUSE;
+        else NEXT_PAUSE_STATE = NOT_PAUSED;
     }
 
     if (IS_NEXT_SCENE) {
@@ -147,11 +164,13 @@ static void update_game(void) {
         load_curr_scene();
     }
 
-    if (NEXT_STATE != GAME_STATE) {
-        GAME_STATE = NEXT_STATE;
-        PAUSE_STATE = NOT_PAUSED;
+    if (NEXT_GAME_STATE != GAME_STATE) {
+        GAME_STATE = NEXT_GAME_STATE;
+        NEXT_PAUSE_STATE = NOT_PAUSED;
         TIME_REMAINING = GAME_STATE_TO_TIME[GAME_STATE];
     }
+
+    PAUSE_STATE = NEXT_PAUSE_STATE;
 
     // -------------------------------------------------------------------
     // Update game state
@@ -207,7 +226,7 @@ static void update_game(void) {
 
         // PLAYER_IS_PICKING state is over
         if (TIME_REMAINING <= 0.0) {
-            NEXT_STATE = GOLOVA_IS_EATING;
+            NEXT_GAME_STATE = GOLOVA_IS_EATING;
             if (!PICKED_ITEM) {
                 for (size_t i = 0; i < SCENE.board.n_items; ++i) {
                     Item* item = &SCENE.board.items[i];
@@ -237,9 +256,9 @@ static void update_game(void) {
             PICKED_ITEM = NULL;
 
             if (SCENE.board.n_misses_allowed < 0 || SCENE.board.n_hits_required == 0) {
-                NEXT_STATE = CURR_SCENE_ID < N_SCENES - 1 ? SCENE_OVER : GAME_OVER;
+                NEXT_GAME_STATE = CURR_SCENE_ID < N_SCENES - 1 ? SCENE_OVER : GAME_OVER;
             } else {
-                NEXT_STATE = PLAYER_IS_PICKING;
+                NEXT_GAME_STATE = PLAYER_IS_PICKING;
             }
         }
     } else if (GAME_STATE == SCENE_OVER) {
@@ -269,48 +288,43 @@ static void draw_postfx(void) {
 static void draw_ggui(void) {
     int screen_height = GetScreenHeight();
     int screen_width = GetScreenWidth();
-
-    const char* text;
-    Color color;
-    Rectangle rec;
+    int cx = screen_width / 2;
+    int cy = screen_height / 2;
 
     if (PAUSE_STATE == MAIN_PAUSE) {
         int font_size = 60;
+        int gap = 20;
+        int pad = 50;
 
         const char* resume_text = "Resume";
-        Rectangle resume_rec = get_text_rec(resume_text, 0, font_size);
-
         const char* options_text = "Options";
-        Rectangle options_rec = get_text_rec(options_text, 0, font_size);
-
         const char* quit_text = "Quit";
-        Rectangle quit_rec = get_text_rec(quit_text, 0, font_size);
 
-        int gap = 10;
-        int pad_x = 50;
-        int pad_y = 100;
+        int width = MeasureText(options_text, font_size) * 1.2;
+        int height = font_size * 3 + gap * 2 + pad * 2;
 
-        int height = pad_y + resume_rec.height + gap + options_rec.height + gap
-                     + quit_rec.height + pad_y;
-        int width = pad_x + options_rec.width + pad_x;
-        int x = (screen_width - width) / 2;
-        int y = (screen_height - height) / 2;
-        rec = (Rectangle){x, y, width, height};
-        DrawRectangleRounded(rec, 0.2, 16, (Color){255, 255, 255, 180});
+        Rectangle main_rec = ggui_get_rec(
+            (Position){cx, cy, CENTER_CENTER}, width, height
+        );
+        DrawRectangleRounded(main_rec, 0.2, 16, (Color){100, 100, 100, 150});
+        DrawRectangleRoundedLines(main_rec, 0.2, 16, 4, WHITE);
 
-        x = (rec.width - resume_rec.width) / 2 + rec.x;
-        y += pad_y;
-        DrawText(resume_text, x, y, resume_rec.height, BLACK);
-        y += resume_rec.height + gap;
+        int y = main_rec.y + pad;
+        if (ggui_button((Position){cx, y, CENTER_TOP}, resume_text, font_size)) {
+            NEXT_PAUSE_STATE = NOT_PAUSED;
+        }
 
-        x = (rec.width - options_rec.width) / 2 + rec.x;
-        DrawText(options_text, x, y, options_rec.height, BLACK);
-        y += options_rec.height + gap;
+        y += font_size + gap;
+        ggui_button((Position){cx, y, CENTER_TOP}, options_text, font_size);
 
-        x = (rec.width - quit_rec.width) / 2 + rec.x;
-        DrawText(quit_text, x, y, quit_rec.height, BLACK);
+        y += font_size + gap;
+        IS_EXIT_GAME = ggui_button((Position){cx, y, CENTER_TOP}, quit_text, font_size);
     } else if (GAME_STATE == SCENE_OVER || GAME_STATE == GAME_OVER) {
-        // Main message
+
+        const char* text;
+        Color color;
+        Position pos;
+
         if (SCENE.board.n_misses_allowed < 0) {
             text = "Golova feels bad...";
             color = MAROON;
@@ -319,36 +333,56 @@ static void draw_ggui(void) {
             color = GREEN;
         }
 
-        int y = screen_height / 2 - 100;
-        rec = get_text_rec(text, y, 100);
-        DrawText(text, rec.x, rec.y, rec.height, color);
+        int font_size = 100;
 
-        // Board rule
-        text = SCENE.board.rule;
-        rec = get_text_rec(text, y - 60, 40);
-        DrawText(SCENE.board.rule, rec.x, rec.y, rec.height, RAYWHITE);
+        pos = (Position){cx, cy, CENTER_CENTER};
+        ggui_text(pos, text, font_size, color);
 
+        pos = (Position){cx, cy - font_size / 2, CENTER_BOT};
+        ggui_text(pos, SCENE.board.rule, font_size / 3, LIGHTGRAY);
+
+        pos = (Position){cx, cy + font_size, CENTER_TOP};
         if (GAME_STATE == SCENE_OVER) {
-            text = "Continue";
-            rec = get_text_rec(text, y + 150.0, 40);
-            bool is_hit = CheckCollisionPointRec(MOUSE_POSITION, rec);
-            color = is_hit ? RAYWHITE : LIGHTGRAY;
-            DrawText(text, rec.x, rec.y, rec.height, color);
-            IS_NEXT_SCENE = is_hit && IS_LMB_PRESSED;
+            IS_NEXT_SCENE = ggui_button(pos, "Continue", font_size / 2);
         } else if (GAME_STATE == GAME_OVER) {
-            text = "Game Over";
-            rec = get_text_rec(text, y + 150.0, 40);
-            DrawText(text, rec.x, rec.y, rec.height, RAYWHITE);
+            ggui_text(pos, "Game Over", font_size / 2, LIGHTGRAY);
         }
     }
 }
 
-Rectangle get_text_rec(const char* text, int y, int font_size) {
-    int screen_width = GetScreenWidth();
-    int text_width = MeasureText(text, font_size);
-    int x = (screen_width - text_width) / 2;
-    Rectangle rec = {x, y, text_width, font_size};
+static Rectangle ggui_get_rec(Position pos, int width, int height) {
+    int x = pos.x;
+    int y = pos.y;
+
+    if (pos.pivot == CENTER_TOP) {
+        x -= width / 2;
+    } else if (pos.pivot == CENTER_CENTER) {
+        x -= width / 2;
+        y -= height / 2;
+    } else if (pos.pivot == CENTER_BOT) {
+        x -= width / 2;
+        y -= height;
+    }
+
+    Rectangle rec = {x, y, width, height};
     return rec;
+}
+
+static bool ggui_button(Position pos, const char* text, int font_size) {
+    int width = MeasureText(text, font_size);
+    Rectangle rec = ggui_get_rec(pos, width, font_size);
+
+    bool is_hit = CheckCollisionPointRec(MOUSE_POSITION, rec);
+    Color color = is_hit ? WHITE : LIGHTGRAY;
+    DrawText(text, rec.x, rec.y, font_size, color);
+
+    return is_hit && IS_LMB_PRESSED;
+}
+
+static void ggui_text(Position pos, const char* text, int font_size, Color color) {
+    int width = MeasureText(text, font_size);
+    Rectangle rec = ggui_get_rec(pos, width, font_size);
+    DrawText(text, rec.x, rec.y, font_size, color);
 }
 
 static void draw_imgui(void) {
