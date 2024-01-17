@@ -38,7 +38,7 @@ void main() {
     vec2 uv = fragTexCoord;
 
     vec3 tex_color;
-    if (u_game_state == 2) {  // GAME_OVER: blur and dim
+    if (u_game_state == 2 || u_game_state == 3) {  // SCENE_OVER | GAME_OVER: blur and dim
         tex_color = sample_texture(texture0, uv, 87, 16) * 0.4;
     } else {
         tex_color = texture(texture0, uv).rgb;

@@ -18,7 +18,8 @@
 typedef enum GameState {
     PLAYER_IS_PICKING = 0,
     GOLOVA_IS_EATING = 1,
-    GAME_OVER = 2,
+    SCENE_OVER = 2,
+    GAME_OVER = 3,
 } GameState;
 
 static RenderTexture2D SCREEN;
@@ -27,6 +28,7 @@ static Shader POSTFX_SHADER;
 #define GAME_STATE_TO_NAME(state) \
     ((state == PLAYER_IS_PICKING)  ? "PLAYER_IS_PICKING" \
      : (state == GOLOVA_IS_EATING) ? "GOLOVA_IS_EATING" \
+     : (state == SCENE_OVER)       ? "SCENE_OVER" \
      : (state == GAME_OVER)        ? "GAME_OVER" \
                                    : "UNKNOWN")
 
@@ -40,6 +42,7 @@ static int N_SCENES;
 static GameState GAME_STATE;
 static GameState NEXT_STATE;
 static float TIME_REMAINING;
+static bool IS_NEXT_SCENE;
 
 static Vector2 MOUSE_POSITION;
 static bool IS_LMB_PRESSED;
@@ -102,7 +105,7 @@ static void load_curr_scene(void) {
     unload_scene();
     load_scene(fp);
 
-    GAME_STATE = PLAYER_IS_PICKING;
+    NEXT_STATE = PLAYER_IS_PICKING;
     TIME_REMAINING = GAME_STATE_TO_TIME[GAME_STATE];
 }
 
@@ -111,6 +114,12 @@ static void update_game(void) {
     IS_LMB_PRESSED = IsMouseButtonPressed(0);
     MOUSE_RAY = GetMouseRay(MOUSE_POSITION, SCENE.camera);
     TIME_REMAINING -= GetFrameTime();
+
+    if (IS_NEXT_SCENE) {
+        IS_NEXT_SCENE = false;
+        CURR_SCENE_ID += 1;
+        load_curr_scene();
+    }
 
     if (NEXT_STATE != GAME_STATE) {
         GAME_STATE = NEXT_STATE;
@@ -198,11 +207,12 @@ static void update_game(void) {
             PICKED_ITEM = NULL;
 
             if (SCENE.board.n_misses_allowed < 0 || SCENE.board.n_hits_required == 0) {
-                NEXT_STATE = GAME_OVER;
+                NEXT_STATE = CURR_SCENE_ID < N_SCENES - 1 ? SCENE_OVER : GAME_OVER;
             } else {
                 NEXT_STATE = PLAYER_IS_PICKING;
             }
         }
+    } else if (GAME_STATE == SCENE_OVER) {
     } else if (GAME_STATE == GAME_OVER) {
     }
 }
@@ -228,7 +238,7 @@ static void draw_ggui(void) {
     int screen_height = GetScreenHeight();
     int screen_width = GetScreenWidth();
 
-    if (GAME_STATE == GAME_OVER || true) {
+    if (GAME_STATE == SCENE_OVER || GAME_STATE == GAME_OVER) {
 
         // Main message
         const char* text;
@@ -250,20 +260,14 @@ static void draw_ggui(void) {
         rec = get_text_rec(text, y - 60, 40);
         DrawText(SCENE.board.rule, rec.x, rec.y, rec.height, RAYWHITE);
 
-        if (CURR_SCENE_ID < N_SCENES - 1) {
-            // Continue button
+        if (GAME_STATE == SCENE_OVER) {
             text = "Continue";
             rec = get_text_rec(text, y + 150.0, 40);
             bool is_hit = CheckCollisionPointRec(MOUSE_POSITION, rec);
             color = is_hit ? RAYWHITE : LIGHTGRAY;
             DrawText(text, rec.x, rec.y, rec.height, color);
-            if (is_hit && IS_LMB_PRESSED) {
-                CURR_SCENE_ID += 1;
-                load_curr_scene();
-                return;
-            }
-        } else {
-            // Game over
+            IS_NEXT_SCENE = is_hit && IS_LMB_PRESSED;
+        } else if (GAME_STATE == GAME_OVER) {
             text = "Game Over";
             rec = get_text_rec(text, y + 150.0, 40);
             DrawText(text, rec.x, rec.y, rec.height, RAYWHITE);
