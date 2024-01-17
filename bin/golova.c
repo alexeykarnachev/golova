@@ -1,4 +1,5 @@
 #include "../src/cimgui_utils.h"
+#include "../src/drawing.h"
 #include "../src/math.h"
 #include "../src/scene.h"
 #include "../src/utils.h"
@@ -9,16 +10,19 @@
 #define CIMGUI_DEFINE_ENUMS_AND_STRUCTS
 #include "cimgui.h"
 
-#define SCREEN_WIDTH 1024
-#define SCREEN_HEIGHT 768
-// #define SCREEN_WIDTH 2560
-// #define SCREEN_HEIGHT 1440
+// #define SCREEN_WIDTH 1024
+// #define SCREEN_HEIGHT 768
+#define SCREEN_WIDTH 2560
+#define SCREEN_HEIGHT 1440
 
 typedef enum GameState {
     PLAYER_IS_PICKING = 0,
-    GOLOVA_IS_EATING,
-    GAME_OVER,
+    GOLOVA_IS_EATING = 1,
+    GAME_OVER = 2,
 } GameState;
+
+static RenderTexture2D SCREEN;
+static Shader POSTFX_SHADER;
 
 #define GAME_STATE_TO_NAME(state) \
     ((state == PLAYER_IS_PICKING)  ? "PLAYER_IS_PICKING" \
@@ -45,13 +49,17 @@ static Item* PICKED_ITEM;
 
 static void load_curr_scene(void);
 static void update_game(void);
-static void draw_game_imgui(void);
+static void draw_postfx(void);
+static void draw_ggui(void);
 static void draw_imgui(void);
+Rectangle get_text_rec(const char* text, int y, int font_size);
 
 int main(void) {
     InitWindow(SCREEN_WIDTH, SCREEN_HEIGHT, "Golova");
     SetTargetFPS(60);
 
+    SCREEN = LoadRenderTexture(SCREEN_WIDTH, SCREEN_HEIGHT);
+    POSTFX_SHADER = LoadShader(0, "resources/shaders/postfx.frag");
     SCENE_FILE_NAMES = get_file_names_in_dir(SCENES_DIR, &N_SCENES);
 
     load_curr_scene();
@@ -61,14 +69,21 @@ int main(void) {
         update_scene();
         update_game();
 
-        BeginDrawing();
+        // Draw main scene
+        BeginTextureMode(SCREEN);
         ClearBackground(BLACK);
 
         BeginMode3D(SCENE.camera);
         draw_scene();
         EndMode3D();
 
-        draw_game_imgui();
+        EndTextureMode();
+
+        // Draw ui and postfx
+        BeginDrawing();
+
+        draw_postfx();
+        draw_ggui();
 
         begin_imgui();
         draw_imgui();
@@ -192,12 +207,30 @@ static void update_game(void) {
     }
 }
 
-static void draw_game_imgui(void) {
+static void draw_postfx(void) {
+    BeginShaderMode(POSTFX_SHADER);
+    SetShaderValue(
+        POSTFX_SHADER,
+        GetShaderLocation(POSTFX_SHADER, "u_game_state"),
+        &GAME_STATE,
+        SHADER_UNIFORM_INT
+    );
+    DrawTextureRec(
+        SCREEN.texture,
+        (Rectangle){0, 0, (float)SCREEN.texture.width, (float)-SCREEN.texture.height},
+        (Vector2){0, 0},
+        WHITE
+    );
+    EndShaderMode();
+}
+
+static void draw_ggui(void) {
     int screen_height = GetScreenHeight();
     int screen_width = GetScreenWidth();
 
-    if (GAME_STATE == GAME_OVER) {
+    if (GAME_STATE == GAME_OVER || true) {
 
+        // Main message
         const char* text;
         Color color;
         if (SCENE.board.n_misses_allowed < 0) {
@@ -208,19 +241,44 @@ static void draw_game_imgui(void) {
             color = GREEN;
         }
 
-        int font_size = 100;
-        int text_width = MeasureText(text, font_size);
-        int x = (screen_width - text_width) / 2;
-        int y = screen_height / 2 - font_size;
-        DrawText(text, x, y, font_size, color);
+        int y = screen_height / 2 - 100;
+        Rectangle rec = get_text_rec(text, y, 100);
+        DrawText(text, rec.x, rec.y, rec.height, color);
 
+        // Board rule
         text = SCENE.board.rule;
-        font_size = 40;
-        text_width = MeasureText(text, font_size);
-        x = (screen_width - text_width) / 2;
-        y = y - font_size * 1.2;
-        DrawText(text, x, y, font_size, RAYWHITE);
+        rec = get_text_rec(text, y - 60, 40);
+        DrawText(SCENE.board.rule, rec.x, rec.y, rec.height, RAYWHITE);
+
+        if (CURR_SCENE_ID < N_SCENES - 1) {
+            // Continue button
+            text = "Continue";
+            rec = get_text_rec(text, y + 150.0, 40);
+            bool is_hit = CheckCollisionPointRec(MOUSE_POSITION, rec);
+            color = is_hit ? RAYWHITE : LIGHTGRAY;
+            DrawText(text, rec.x, rec.y, rec.height, color);
+            if (is_hit && IS_LMB_PRESSED) {
+                CURR_SCENE_ID += 1;
+                load_curr_scene();
+                return;
+            }
+        } else {
+            // Game over
+            text = "Game Over";
+            rec = get_text_rec(text, y + 150.0, 40);
+            DrawText(text, rec.x, rec.y, rec.height, RAYWHITE);
+        }
     }
+}
+
+Rectangle get_text_rec(const char* text, int y, int font_size) {
+    int screen_width = GetScreenWidth();
+    int text_width = MeasureText(text, font_size);
+    int x = (screen_width - text_width) / 2;
+    // DrawText(text, x, y, font_size, color);
+
+    Rectangle rec = {x, y, text_width, font_size};
+    return rec;
 }
 
 static void draw_imgui(void) {

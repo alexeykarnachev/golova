@@ -128,6 +128,7 @@ void unload_scene(void) {
         Item* item = &SCENE.board.items[i];
         UnloadTexture(item->texture);
     }
+    SCENE = (Scene){0};
 }
 
 void update_scene(void) {
