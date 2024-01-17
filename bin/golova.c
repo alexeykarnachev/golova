@@ -10,10 +10,10 @@
 #define CIMGUI_DEFINE_ENUMS_AND_STRUCTS
 #include "cimgui.h"
 
-// #define SCREEN_WIDTH 1024
-// #define SCREEN_HEIGHT 768
-#define SCREEN_WIDTH 2560
-#define SCREEN_HEIGHT 1440
+#define SCREEN_WIDTH 1024
+#define SCREEN_HEIGHT 768
+// #define SCREEN_WIDTH 2560
+// #define SCREEN_HEIGHT 1440
 
 typedef enum GameState {
     PLAYER_IS_PICKING = 0,
@@ -43,9 +43,11 @@ static GameState GAME_STATE;
 static GameState NEXT_STATE;
 static float TIME_REMAINING;
 static bool IS_NEXT_SCENE;
+static bool IS_EXIT_GAME;
 
 static Vector2 MOUSE_POSITION;
 static bool IS_LMB_PRESSED;
+static bool IS_ALTF4_PRESSED;
 static Ray MOUSE_RAY;
 
 static Item* PICKED_ITEM;
@@ -68,7 +70,7 @@ int main(void) {
     load_curr_scene();
     load_imgui();
 
-    while (!WindowShouldClose()) {
+    while (!IS_EXIT_GAME) {
         update_scene();
         update_game();
 
@@ -112,8 +114,13 @@ static void load_curr_scene(void) {
 static void update_game(void) {
     MOUSE_POSITION = GetMousePosition();
     IS_LMB_PRESSED = IsMouseButtonPressed(0);
+    IS_ALTF4_PRESSED = IsKeyDown(KEY_LEFT_ALT) && IsKeyPressed(KEY_F4);
     MOUSE_RAY = GetMouseRay(MOUSE_POSITION, SCENE.camera);
     TIME_REMAINING -= GetFrameTime();
+
+    if ((WindowShouldClose() || IS_ALTF4_PRESSED) && !IsKeyPressed(KEY_ESCAPE)) {
+        IS_EXIT_GAME = true;
+    }
 
     if (IS_NEXT_SCENE) {
         IS_NEXT_SCENE = false;
