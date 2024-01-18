@@ -12,9 +12,6 @@ Scene SCENE;
 
 Material MATERIAL_DEFAULT;
 
-static void update_board_items(void);
-static void update_golova(void);
-
 void load_scene(const char* file_path) {
     MATERIAL_DEFAULT = LoadMaterialDefault();
 
@@ -82,8 +79,6 @@ void load_scene(const char* file_path) {
 
     SCENE.golova.eyes_curr_shift = SCENE.golova.eyes_idle_shift;
     SCENE.golova.eyes_curr_uplift = SCENE.golova.eyes_idle_uplift;
-    SCENE.golova.eyes_target_shift = SCENE.golova.eyes_idle_shift;
-    SCENE.golova.eyes_target_uplift = SCENE.golova.eyes_idle_uplift;
 
     // -------------------------------------------------------------------
     // Load resources
@@ -181,11 +176,6 @@ void unload_scene(void) {
     SCENE = (Scene){0};
 }
 
-void update_scene(void) {
-    update_board_items();
-    update_golova();
-}
-
 void draw_scene(void) {
     // -------------------------------------------------------------------
     // Board
@@ -252,75 +242,4 @@ void draw_scene(void) {
         );
         draw_mesh_m(item->matrix, SCENE.board.item_material, SCENE.board.item_mesh);
     }
-}
-
-static void update_board_items(void) {
-    Board* b = &SCENE.board;
-    Transform t = b->transform;
-    t.scale = Vector3Scale(Vector3One(), t.scale.x);
-
-    size_t n_items = b->n_items;
-    if (n_items == 0) return;
-
-    int n_rows = sqrt(n_items);
-    int n_cols = ceil((float)n_items / n_rows);
-    for (size_t i = 0; i < n_items; ++i) {
-        Item* item = &b->items[i];
-
-        int i_row = i / n_cols;
-        int i_col = i % n_cols;
-
-        float z = n_rows > 1 ? (float)i_row / (n_rows - 1) - 0.5 : 0.0;
-        float x = n_cols > 1 ? (float)i_col / (n_cols - 1) - 0.5 : 0.0;
-
-        rlPushMatrix();
-        {
-            rlMultMatrixf(MatrixToFloat(get_transform_matrix(t)));
-            rlScalef(b->board_scale, b->board_scale, b->board_scale);
-            rlTranslatef(x, 0.0, z);
-            rlScalef(b->item_scale, b->item_scale, b->item_scale);
-            rlTranslatef(0.0, b->item_elevation, 0.0);
-            rlRotatef(90.0, 1.0, 0.0, 0.0);
-            item->matrix = rlGetMatrixTransform();
-        }
-        rlPopMatrix();
-    }
-}
-
-static void update_value(float dt, float speed, float* target, float* curr) {
-    float todo = *target - *curr;
-    float step = speed * dt;
-    if (step > fabs(todo)) *curr = *target;
-    else if (todo > 0.0) *curr += step;
-    else *curr -= step;
-}
-
-static void update_value2(
-    float dt, float speed, float* target_x, float* target_y, float* curr_x, float* curr_y
-) {
-    Vector2 d = {*target_x - *curr_x, *target_y - *curr_y};
-    float len = Vector2Length(d);
-    float step = speed * dt;
-    if (step > len) {
-        *curr_x = *target_x;
-        *curr_y = *target_y;
-    } else {
-        d = Vector2Scale(Vector2Normalize(d), step);
-        *curr_x += d.x;
-        *curr_y += d.y;
-    }
-}
-
-static void update_golova(void) {
-    float dt = GetFrameTime();
-    float eyes_speed = 0.08;
-
-    update_value2(
-        dt,
-        eyes_speed,
-        &SCENE.golova.eyes_target_shift,
-        &SCENE.golova.eyes_target_uplift,
-        &SCENE.golova.eyes_curr_shift,
-        &SCENE.golova.eyes_curr_uplift
-    );
 }

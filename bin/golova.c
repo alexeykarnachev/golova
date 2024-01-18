@@ -5,6 +5,7 @@
 #include "../src/utils.h"
 #include "raylib.h"
 #include "raymath.h"
+#include "rlgl.h"
 #include <stdio.h>
 
 #define CIMGUI_DEFINE_ENUMS_AND_STRUCTS
@@ -14,6 +15,8 @@
 #define SCREEN_HEIGHT 768
 // #define SCREEN_WIDTH 2560
 // #define SCREEN_HEIGHT 1440
+
+#define EYES_SPEED 0.08
 
 typedef enum GameState {
     PLAYER_IS_PICKING = 0,
@@ -72,6 +75,7 @@ static float TIME_REMAINING;
 static bool IS_NEXT_SCENE;
 static bool IS_EXIT_GAME;
 
+static float DT;
 static Vector2 MOUSE_POSITION;
 static bool IS_ESCAPE_PRESSED;
 static bool IS_LMB_PRESSED;
@@ -79,6 +83,9 @@ static bool IS_ALTF4_PRESSED;
 static Ray MOUSE_RAY;
 
 static Item* PICKED_ITEM;
+
+static float EYES_TARGET_SHIFT;
+static float EYES_TARGET_UPLIFT;
 
 static void load_curr_scene(void);
 static void update_game(void);
@@ -89,6 +96,11 @@ static void draw_imgui(void);
 static bool ggui_button(Position pos, const char* text, int font_size);
 static Rectangle ggui_get_rec(Position pos, int width, int height);
 static void ggui_text(Position pos, const char* text, int font_size, Color color);
+
+static void update_value(float dt, float speed, float* target, float* curr);
+static void update_value2(
+    float dt, float speed, float target_x, float target_y, float* curr_x, float* curr_y
+);
 
 int main(void) {
     InitWindow(SCREEN_WIDTH, SCREEN_HEIGHT, "Golova");
@@ -102,7 +114,6 @@ int main(void) {
     load_imgui();
 
     while (!IS_EXIT_GAME) {
-        update_scene();
         update_game();
 
         // Draw main scene
@@ -143,6 +154,7 @@ static void load_curr_scene(void) {
 }
 
 static void update_game(void) {
+    DT = GetFrameTime();
     MOUSE_POSITION = GetMousePosition();
     IS_ESCAPE_PRESSED = IsKeyPressed(KEY_ESCAPE);
     IS_LMB_PRESSED = IsMouseButtonPressed(0);
@@ -171,6 +183,39 @@ static void update_game(void) {
     }
 
     PAUSE_STATE = NEXT_PAUSE_STATE;
+
+    // -------------------------------------------------------------------
+    // Update board items
+    Board* b = &SCENE.board;
+    Transform t = b->transform;
+    t.scale = Vector3Scale(Vector3One(), t.scale.x);
+
+    size_t n_items = b->n_items;
+    if (n_items == 0) return;
+
+    int n_rows = sqrt(n_items);
+    int n_cols = ceil((float)n_items / n_rows);
+    for (size_t i = 0; i < n_items; ++i) {
+        Item* item = &b->items[i];
+
+        int i_row = i / n_cols;
+        int i_col = i % n_cols;
+
+        float z = n_rows > 1 ? (float)i_row / (n_rows - 1) - 0.5 : 0.0;
+        float x = n_cols > 1 ? (float)i_col / (n_cols - 1) - 0.5 : 0.0;
+
+        rlPushMatrix();
+        {
+            rlMultMatrixf(MatrixToFloat(get_transform_matrix(t)));
+            rlScalef(b->board_scale, b->board_scale, b->board_scale);
+            rlTranslatef(x, 0.0, z);
+            rlScalef(b->item_scale, b->item_scale, b->item_scale);
+            rlTranslatef(0.0, b->item_elevation, 0.0);
+            rlRotatef(90.0, 1.0, 0.0, 0.0);
+            item->matrix = rlGetMatrixTransform();
+        }
+        rlPopMatrix();
+    }
 
     // -------------------------------------------------------------------
     // Update Golova gaze
@@ -205,14 +250,22 @@ static void update_game(void) {
     if (has_target) {
         float golova_x = SCENE.golova.transform.translation.x;
         float golova_z = SCENE.golova.transform.translation.z;
-        SCENE.golova.eyes_target_shift = SCENE.golova.eyes_idle_shift
-                                         + 0.075 * (target.x - golova_x);
-        SCENE.golova.eyes_target_uplift = SCENE.golova.eyes_idle_uplift
-                                          - 0.01 * (target.z - golova_z);
+        EYES_TARGET_SHIFT = SCENE.golova.eyes_idle_shift + 0.075 * (target.x - golova_x);
+        EYES_TARGET_UPLIFT = SCENE.golova.eyes_idle_uplift - 0.01 * (target.z - golova_z);
     } else {
-        SCENE.golova.eyes_target_shift = SCENE.golova.eyes_idle_shift;
-        SCENE.golova.eyes_target_uplift = SCENE.golova.eyes_idle_uplift;
+        EYES_TARGET_SHIFT = SCENE.golova.eyes_idle_shift;
+        EYES_TARGET_UPLIFT = SCENE.golova.eyes_idle_uplift;
     }
+
+    // Apply Golova gaze
+    update_value2(
+        DT,
+        EYES_SPEED,
+        EYES_TARGET_SHIFT,
+        EYES_TARGET_UPLIFT,
+        &SCENE.golova.eyes_curr_shift,
+        &SCENE.golova.eyes_curr_uplift
+    );
 
     // -------------------------------------------------------------------
     // Update game state
@@ -453,4 +506,28 @@ static void draw_imgui(void) {
         igText("picked_item_state: %s", picked_item_state);
     }
     igEnd();
+}
+
+static void update_value(float dt, float speed, float* target, float* curr) {
+    float todo = *target - *curr;
+    float step = speed * dt;
+    if (step > fabs(todo)) *curr = *target;
+    else if (todo > 0.0) *curr += step;
+    else *curr -= step;
+}
+
+static void update_value2(
+    float dt, float speed, float target_x, float target_y, float* curr_x, float* curr_y
+) {
+    Vector2 d = {target_x - *curr_x, target_y - *curr_y};
+    float len = Vector2Length(d);
+    float step = speed * dt;
+    if (step > len) {
+        *curr_x = target_x;
+        *curr_y = target_y;
+    } else {
+        d = Vector2Scale(Vector2Normalize(d), step);
+        *curr_x += d.x;
+        *curr_y += d.y;
+    }
 }

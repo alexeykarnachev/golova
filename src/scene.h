@@ -35,9 +35,6 @@ typedef struct Golova {
     float eyes_curr_shift;
     float eyes_curr_uplift;
 
-    float eyes_target_shift;
-    float eyes_target_uplift;
-
     Material eyes_material;
 
     struct {
@@ -106,5 +103,4 @@ extern Scene SCENE;
 void load_scene(const char* file_path);
 void save_scene(const char* file_path);
 void unload_scene(void);
-void update_scene(void);
 void draw_scene(void);
