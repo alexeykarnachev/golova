@@ -57,7 +57,7 @@ static Shader POSTFX_SHADER;
      : (state == GAME_OVER)        ? "GAME_OVER" \
                                    : "UNKNOWN")
 
-static float GAME_STATE_TO_TIME[] = {1.0, 1.0, 0.0};
+static float GAME_STATE_TO_TIME[] = {100.0, 1.0, 0.0};
 
 static char* SCENES_DIR = "resources/scenes";
 static int CURR_SCENE_ID;
@@ -173,6 +173,46 @@ static void update_game(void) {
     PAUSE_STATE = NEXT_PAUSE_STATE;
 
     // -------------------------------------------------------------------
+    // Update Golova gaze
+    Vector3 target;
+    bool has_target = false;
+
+    // Look at hot, active or dying item
+    for (size_t i = 0; i < SCENE.board.n_items; ++i) {
+        Item* item = &SCENE.board.items[i];
+        if (item->state > ITEM_COLD && item->state < ITEM_DEAD) {
+            Matrix mat = MatrixMultiply(
+                get_transform_matrix(SCENE.board.transform), item->matrix
+            );
+            Vector3 pos = (Vector3){mat.m12, mat.m13, mat.m14};
+            target = pos;
+            has_target = true;
+            break;
+        }
+    }
+
+    // If there is no target item, just follow the mouse cursor (board collision)
+    if (!has_target) {
+        RayCollision collision = GetRayCollisionMesh(
+            MOUSE_RAY, SCENE.board.mesh, get_transform_matrix(SCENE.board.transform)
+        );
+        has_target = collision.hit;
+        target = collision.point;
+    }
+
+    if (has_target) {
+        float golova_x = SCENE.golova.transform.translation.x;
+        float golova_z = SCENE.golova.transform.translation.z;
+        SCENE.golova.eyes_target_shift = SCENE.golova.eyes_idle_shift
+                                         + 0.075 * (target.x - golova_x);
+        SCENE.golova.eyes_target_uplift = SCENE.golova.eyes_idle_uplift
+                                          - 0.01 * (target.z - golova_z);
+    } else {
+        SCENE.golova.eyes_target_shift = SCENE.golova.eyes_idle_shift;
+        SCENE.golova.eyes_target_uplift = SCENE.golova.eyes_idle_uplift;
+    }
+
+    // -------------------------------------------------------------------
     // Update game state
     if (PAUSE_STATE > 0) return;
     TIME_REMAINING -= GetFrameTime();
@@ -185,7 +225,7 @@ static void update_game(void) {
             Item* item = &SCENE.board.items[i];
 
             // Don't update dead items
-            if (item->is_dead) continue;
+            if (item->state == ITEM_DEAD) continue;
 
             // Collide mouse and item meshes
             RayCollision collision = GetRayCollisionMesh(
@@ -230,7 +270,7 @@ static void update_game(void) {
             if (!PICKED_ITEM) {
                 for (size_t i = 0; i < SCENE.board.n_items; ++i) {
                     Item* item = &SCENE.board.items[i];
-                    if (!item->is_dead && !item->is_correct) {
+                    if (!(item->state == ITEM_DEAD) && !item->is_correct) {
                         PICKED_ITEM = item;
                     }
                 }
@@ -242,12 +282,12 @@ static void update_game(void) {
         // Cool down all non-dying items when golova is eating
         for (size_t i = 0; i < SCENE.board.n_items; ++i) {
             Item* item = &SCENE.board.items[i];
-            if (item->state != ITEM_DYING) item->state = ITEM_COLD;
+            if (item->state < ITEM_DYING) item->state = ITEM_COLD;
         }
 
         // GOLOVA_IS_EATING state is over
         if (TIME_REMAINING <= 0.0) {
-            PICKED_ITEM->is_dead = true;
+            PICKED_ITEM->state = ITEM_DEAD;
             if (PICKED_ITEM->is_correct) {
                 SCENE.board.n_hits_required -= 1;
             } else {

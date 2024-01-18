@@ -5,6 +5,7 @@
 #include "raylib.h"
 #include "raymath.h"
 #include "rlgl.h"
+#include <math.h>
 #include <stdio.h>
 
 Scene SCENE;
@@ -12,16 +13,17 @@ Scene SCENE;
 Material MATERIAL_DEFAULT;
 
 static void update_board_items(void);
+static void update_golova(void);
 
 void load_scene(const char* file_path) {
     MATERIAL_DEFAULT = LoadMaterialDefault();
 
     // Golova
     SCENE.golova.transform = get_default_transform();
-    SCENE.golova.eyes_scale = 0.056;
-    SCENE.golova.eyes_uplift = 0.027;
-    SCENE.golova.eyes_shift = 0.014;
-    SCENE.golova.eyes_spread = 0.252;
+    SCENE.golova.eyes_idle_scale = 0.056;
+    SCENE.golova.eyes_idle_uplift = 0.027;
+    SCENE.golova.eyes_idle_shift = 0.014;
+    SCENE.golova.eyes_idle_spread = 0.252;
 
     // Board
     SCENE.board.transform = get_default_transform();
@@ -47,10 +49,10 @@ void load_scene(const char* file_path) {
 
         // Golova
         fread(&SCENE.golova.transform, sizeof(Transform), 1, f);
-        fread(&SCENE.golova.eyes_scale, sizeof(float), 1, f);
-        fread(&SCENE.golova.eyes_uplift, sizeof(float), 1, f);
-        fread(&SCENE.golova.eyes_shift, sizeof(float), 1, f);
-        fread(&SCENE.golova.eyes_spread, sizeof(float), 1, f);
+        fread(&SCENE.golova.eyes_idle_scale, sizeof(float), 1, f);
+        fread(&SCENE.golova.eyes_idle_uplift, sizeof(float), 1, f);
+        fread(&SCENE.golova.eyes_idle_shift, sizeof(float), 1, f);
+        fread(&SCENE.golova.eyes_idle_spread, sizeof(float), 1, f);
 
         // Board
         fread(&SCENE.board.transform, sizeof(Transform), 1, f);
@@ -77,6 +79,11 @@ void load_scene(const char* file_path) {
 
         fclose(f);
     }
+
+    SCENE.golova.eyes_curr_shift = SCENE.golova.eyes_idle_shift;
+    SCENE.golova.eyes_curr_uplift = SCENE.golova.eyes_idle_uplift;
+    SCENE.golova.eyes_target_shift = SCENE.golova.eyes_idle_shift;
+    SCENE.golova.eyes_target_uplift = SCENE.golova.eyes_idle_uplift;
 
     // -------------------------------------------------------------------
     // Load resources
@@ -119,10 +126,10 @@ void save_scene(const char* file_path) {
 
     // Golova
     fwrite(&SCENE.golova.transform, sizeof(Transform), 1, f);
-    fwrite(&SCENE.golova.eyes_scale, sizeof(float), 1, f);
-    fwrite(&SCENE.golova.eyes_uplift, sizeof(float), 1, f);
-    fwrite(&SCENE.golova.eyes_shift, sizeof(float), 1, f);
-    fwrite(&SCENE.golova.eyes_spread, sizeof(float), 1, f);
+    fwrite(&SCENE.golova.eyes_idle_scale, sizeof(float), 1, f);
+    fwrite(&SCENE.golova.eyes_idle_uplift, sizeof(float), 1, f);
+    fwrite(&SCENE.golova.eyes_idle_shift, sizeof(float), 1, f);
+    fwrite(&SCENE.golova.eyes_idle_spread, sizeof(float), 1, f);
 
     // Board
     fwrite(&SCENE.board.transform, sizeof(Transform), 1, f);
@@ -163,6 +170,7 @@ void unload_scene(void) {
 
 void update_scene(void) {
     update_board_items();
+    update_golova();
 }
 
 void draw_scene(void) {
@@ -172,10 +180,10 @@ void draw_scene(void) {
     // -------------------------------------------------------------------
     // Eyes
     Matrix mat = get_transform_matrix(SCENE.golova.transform);
-    float eyes_uplift = SCENE.golova.eyes_uplift;
-    float eyes_scale = SCENE.golova.eyes_scale;
-    float eyes_shift = SCENE.golova.eyes_shift;
-    float eyes_spread = SCENE.golova.eyes_spread;
+    float eyes_uplift = SCENE.golova.eyes_curr_uplift;
+    float eyes_shift = SCENE.golova.eyes_curr_shift;
+    float eyes_scale = SCENE.golova.eyes_idle_scale;
+    float eyes_spread = SCENE.golova.eyes_idle_spread;
 
     Matrix s = MatrixScale(eyes_scale, eyes_scale, eyes_scale);
     Matrix left_t = MatrixTranslate(-eyes_spread / 2.0 + eyes_shift, -0.01, -eyes_uplift);
@@ -204,7 +212,7 @@ void draw_scene(void) {
     Shader item_shader = SCENE.board.item_material.shader;
     for (size_t i = 0; i < SCENE.board.n_items; ++i) {
         Item* item = &SCENE.board.items[i];
-        if (item->is_dead) continue;
+        if (item->state == ITEM_DEAD) continue;
 
         SCENE.board.item_material.maps[0].texture = item->texture;
         int u_state = item->state;
@@ -249,4 +257,42 @@ static void update_board_items(void) {
         }
         rlPopMatrix();
     }
+}
+
+static void update_value(float dt, float speed, float* target, float* curr) {
+    float todo = *target - *curr;
+    float step = speed * dt;
+    if (step > fabs(todo)) *curr = *target;
+    else if (todo > 0.0) *curr += step;
+    else *curr -= step;
+}
+
+static void update_value2(
+    float dt, float speed, float* target_x, float* target_y, float* curr_x, float* curr_y
+) {
+    Vector2 d = {*target_x - *curr_x, *target_y - *curr_y};
+    float len = Vector2Length(d);
+    float step = speed * dt;
+    if (step > len) {
+        *curr_x = *target_x;
+        *curr_y = *target_y;
+    } else {
+        d = Vector2Scale(Vector2Normalize(d), step);
+        *curr_x += d.x;
+        *curr_y += d.y;
+    }
+}
+
+static void update_golova(void) {
+    float dt = GetFrameTime();
+    float eyes_speed = 0.08;
+
+    update_value2(
+        dt,
+        eyes_speed,
+        &SCENE.golova.eyes_target_shift,
+        &SCENE.golova.eyes_target_uplift,
+        &SCENE.golova.eyes_curr_shift,
+        &SCENE.golova.eyes_curr_uplift
+    );
 }

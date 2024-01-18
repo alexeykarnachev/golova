@@ -388,10 +388,12 @@ static void draw_imgui(void) {
         if (ig_collapsing_header("Golova", true)) {
             Golova* g = &SCENE.golova;
             igSeparatorText("Eyes");
-            igDragFloat("Uplift##eyes", &g->eyes_uplift, 0.001, -0.02, 0.08, "%.3f", 0);
-            igDragFloat("Scale##eyes", &g->eyes_scale, 0.001, 0.001, 0.2, "%.3f", 0);
-            igDragFloat("Shift##eyes", &g->eyes_shift, 0.001, -0.2, 0.2, "%.3f", 0);
-            igDragFloat("Spread##eyes", &g->eyes_spread, 0.001, 0.1, 0.5, "%.3f", 0);
+            igDragFloat(
+                "Uplift##eyes", &g->eyes_idle_uplift, 0.001, -0.02, 0.08, "%.3f", 0
+            );
+            igDragFloat("Scale##eyes", &g->eyes_idle_scale, 0.001, 0.001, 0.2, "%.3f", 0);
+            igDragFloat("Shift##eyes", &g->eyes_idle_shift, 0.001, -0.2, 0.2, "%.3f", 0);
+            igDragFloat("Spread##eyes", &g->eyes_idle_spread, 0.001, 0.1, 0.5, "%.3f", 0);
         }
 
         if (ig_collapsing_header("Board", true)) {

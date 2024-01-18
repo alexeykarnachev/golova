@@ -13,10 +13,17 @@ typedef struct Golova {
     Mesh mesh;
 
     // Eyes
-    float eyes_scale;
-    float eyes_uplift;
-    float eyes_shift;
-    float eyes_spread;
+    float eyes_idle_scale;
+    float eyes_idle_uplift;
+    float eyes_idle_shift;
+    float eyes_idle_spread;
+
+    float eyes_curr_shift;
+    float eyes_curr_uplift;
+
+    float eyes_target_shift;
+    float eyes_target_uplift;
+
     Material eyes_material;
 
     struct {
@@ -35,6 +42,7 @@ typedef enum ItemState {
     ITEM_HOT,
     ITEM_ACTIVE,
     ITEM_DYING,
+    ITEM_DEAD,
 } ItemState;
 
 #define ITEM_STATE_TO_NAME(state) \
@@ -49,7 +57,6 @@ typedef struct Item {
     Matrix matrix;
 
     bool is_correct;
-    bool is_dead;
     ItemState state;
 
     char name[MAX_ITEM_NAME_LENGTH];
