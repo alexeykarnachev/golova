@@ -7,10 +7,24 @@
 #define MAX_ITEM_NAME_LENGTH 128
 #define MAX_RULE_LENGTH 128
 
+typedef enum GolovaState {
+    GOLOVA_IDLE = 0,
+    GOLOVA_EAT,
+} GolovaState;
+
 typedef struct Golova {
     Transform transform;
-    Material material;
-    Mesh mesh;
+    GolovaState state;
+
+    struct {
+        Material material;
+        Mesh mesh;
+    } idle;
+
+    struct {
+        Material material;
+        Mesh mesh;
+    } eat;
 
     // Eyes
     float eyes_idle_scale;

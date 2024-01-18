@@ -57,7 +57,7 @@ static Shader POSTFX_SHADER;
      : (state == GAME_OVER)        ? "GAME_OVER" \
                                    : "UNKNOWN")
 
-static float GAME_STATE_TO_TIME[] = {100.0, 1.0, 0.0};
+static float GAME_STATE_TO_TIME[] = {5.0, 5.0, 0.0};
 
 static char* SCENES_DIR = "resources/scenes";
 static int CURR_SCENE_ID;
@@ -187,7 +187,9 @@ static void update_game(void) {
             Vector3 pos = (Vector3){mat.m12, mat.m13, mat.m14};
             target = pos;
             has_target = true;
-            break;
+
+            // Don't check other items, we already look at the picked (active) item
+            if (item == PICKED_ITEM) break;
         }
     }
 
@@ -218,6 +220,8 @@ static void update_game(void) {
     TIME_REMAINING -= GetFrameTime();
 
     if (GAME_STATE == PLAYER_IS_PICKING) {
+        // Set up Golova state
+        SCENE.golova.state = GOLOVA_IDLE;
 
         // Handle mouse input and update item states
         bool is_hit_any = false;
@@ -279,6 +283,9 @@ static void update_game(void) {
             PICKED_ITEM->state = ITEM_DYING;
         }
     } else if (GAME_STATE == GOLOVA_IS_EATING) {
+        // Set up Golova state
+        SCENE.golova.state = GOLOVA_EAT;
+
         // Cool down all non-dying items when golova is eating
         for (size_t i = 0; i < SCENE.board.n_items; ++i) {
             Item* item = &SCENE.board.items[i];

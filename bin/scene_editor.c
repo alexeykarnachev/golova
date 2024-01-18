@@ -219,7 +219,7 @@ static void update_collision_infos(void) {
 
     COLLISION_INFOS[N_COLLISION_INFOS].entity_type = GOLOVA_TYPE;
     COLLISION_INFOS[N_COLLISION_INFOS].transform = &SCENE.golova.transform;
-    COLLISION_INFOS[N_COLLISION_INFOS++].mesh = SCENE.golova.mesh;
+    COLLISION_INFOS[N_COLLISION_INFOS++].mesh = SCENE.golova.idle.mesh;
 
     COLLISION_INFOS[N_COLLISION_INFOS].entity_type = BOARD_TYPE;
     COLLISION_INFOS[N_COLLISION_INFOS].transform = &SCENE.board.transform;

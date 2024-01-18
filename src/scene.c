@@ -87,12 +87,23 @@ void load_scene(const char* file_path) {
 
     // -------------------------------------------------------------------
     // Load resources
-    // Golova
-    Texture2D texture = LoadTexture("resources/golova/sprites/golova.png");
-    SCENE.golova.material = LoadMaterialDefault();
-    SCENE.golova.material.shader = LoadShader(0, "resources/shaders/sprite.frag");
-    SCENE.golova.material.maps[0].texture = texture;
-    SCENE.golova.mesh = GenMeshPlane((float)texture.width / texture.height, 1.0, 2, 2);
+    // Golova idle
+    Texture2D texture = LoadTexture("resources/golova/sprites/golova_idle.png");
+    SCENE.golova.idle.material = LoadMaterialDefault();
+    SCENE.golova.idle.material.shader = LoadShader(0, "resources/shaders/sprite.frag");
+    SCENE.golova.idle.material.maps[0].texture = texture;
+    SCENE.golova.idle.mesh = GenMeshPlane(
+        (float)texture.width / texture.height, 1.0, 2, 2
+    );
+
+    // Golova eat
+    texture = LoadTexture("resources/golova/sprites/golova_eat.png");
+    SCENE.golova.eat.material = LoadMaterialDefault();
+    SCENE.golova.eat.material.shader = LoadShader(0, "resources/shaders/sprite.frag");
+    SCENE.golova.eat.material.maps[0].texture = texture;
+    SCENE.golova.eat.mesh = GenMeshPlane(
+        (float)texture.width / texture.height, 1.0, 2, 2
+    );
 
     // Golova eyes
     SCENE.golova.eyes_material = LoadMaterialDefault();
@@ -155,10 +166,12 @@ void save_scene(const char* file_path) {
 }
 
 void unload_scene(void) {
-    UnloadMesh(SCENE.golova.mesh);
+    UnloadMesh(SCENE.golova.idle.mesh);
+    UnloadMesh(SCENE.golova.eat.mesh);
     UnloadMesh(SCENE.board.mesh);
     UnloadMesh(SCENE.board.item_mesh);
-    UnloadMaterial(SCENE.golova.material);
+    UnloadMaterial(SCENE.golova.idle.material);
+    UnloadMaterial(SCENE.golova.eat.material);
     UnloadMaterial(SCENE.board.material);
     UnloadMaterial(SCENE.board.item_material);
     for (size_t i = 0; i < SCENE.board.n_items; ++i) {
@@ -174,12 +187,27 @@ void update_scene(void) {
 }
 
 void draw_scene(void) {
-    draw_mesh_t(SCENE.golova.transform, SCENE.golova.material, SCENE.golova.mesh);
+    // -------------------------------------------------------------------
+    // Board
     draw_mesh_t(SCENE.board.transform, SCENE.board.material, SCENE.board.mesh);
 
     // -------------------------------------------------------------------
-    // Eyes
-    Matrix mat = get_transform_matrix(SCENE.golova.transform);
+    // Golova
+    Transform golova_transform = SCENE.golova.transform;
+    Matrix golova_mat = get_transform_matrix(golova_transform);
+    Mesh golova_mesh;
+    Material golova_material;
+    if (SCENE.golova.state == GOLOVA_IDLE) {
+        golova_mesh = SCENE.golova.idle.mesh;
+        golova_material = SCENE.golova.idle.material;
+    } else if (SCENE.golova.state == GOLOVA_EAT) {
+        golova_mesh = SCENE.golova.eat.mesh;
+        golova_material = SCENE.golova.eat.material;
+    }
+    draw_mesh_t(golova_transform, golova_material, golova_mesh);
+
+    // -------------------------------------------------------------------
+    // Golova Eyes
     float eyes_uplift = SCENE.golova.eyes_curr_uplift;
     float eyes_shift = SCENE.golova.eyes_curr_shift;
     float eyes_scale = SCENE.golova.eyes_idle_scale;
@@ -189,8 +217,8 @@ void draw_scene(void) {
     Matrix left_t = MatrixTranslate(-eyes_spread / 2.0 + eyes_shift, -0.01, -eyes_uplift);
     Matrix right_t = MatrixTranslate(eyes_spread / 2.0 + eyes_shift, -0.01, -eyes_uplift);
 
-    Matrix left_mat = MatrixMultiply(s, MatrixMultiply(left_t, mat));
-    Matrix right_mat = MatrixMultiply(s, MatrixMultiply(right_t, mat));
+    Matrix left_mat = MatrixMultiply(s, MatrixMultiply(left_t, golova_mat));
+    Matrix right_mat = MatrixMultiply(s, MatrixMultiply(right_t, golova_mat));
 
     Material material = SCENE.golova.eyes_material;
 
@@ -203,10 +231,10 @@ void draw_scene(void) {
     // Eyes background
     s = MatrixScale(0.75, 1.0, 0.15);
     Matrix t = MatrixTranslate(0.0, -0.02, -eyes_uplift);
-    Matrix eyes_background_mat = MatrixMultiply(s, MatrixMultiply(t, mat));
+    Matrix eyes_background_mat = MatrixMultiply(s, MatrixMultiply(t, golova_mat));
 
     MATERIAL_DEFAULT.maps[0].color = LIGHTGRAY;
-    draw_mesh_m(eyes_background_mat, MATERIAL_DEFAULT, SCENE.golova.mesh);
+    draw_mesh_m(eyes_background_mat, MATERIAL_DEFAULT, golova_mesh);
 
     // Items
     Shader item_shader = SCENE.board.item_material.shader;
