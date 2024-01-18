@@ -76,6 +76,7 @@ static bool IS_NEXT_SCENE;
 static bool IS_EXIT_GAME;
 
 static float DT;
+static float TIME;
 static Vector2 MOUSE_POSITION;
 static bool IS_ESCAPE_PRESSED;
 static bool IS_LMB_PRESSED;
@@ -155,6 +156,7 @@ static void load_curr_scene(void) {
 
 static void update_game(void) {
     DT = GetFrameTime();
+    TIME = GetTime();
     MOUSE_POSITION = GetMousePosition();
     IS_ESCAPE_PRESSED = IsKeyPressed(KEY_ESCAPE);
     IS_LMB_PRESSED = IsMouseButtonPressed(0);
@@ -189,13 +191,12 @@ static void update_game(void) {
     Board* b = &SCENE.board;
     Transform t = b->transform;
     t.scale = Vector3Scale(Vector3One(), t.scale.x);
+    Matrix board_matrix = get_transform_matrix(t);
+    float* board_matrix_f = MatrixToFloat(board_matrix);
 
-    size_t n_items = b->n_items;
-    if (n_items == 0) return;
-
-    int n_rows = sqrt(n_items);
-    int n_cols = ceil((float)n_items / n_rows);
-    for (size_t i = 0; i < n_items; ++i) {
+    int n_rows = sqrt(b->n_items);
+    int n_cols = ceil((float)b->n_items / n_rows);
+    for (size_t i = 0; i < b->n_items; ++i) {
         Item* item = &b->items[i];
 
         int i_row = i / n_cols;
@@ -206,11 +207,15 @@ static void update_game(void) {
 
         rlPushMatrix();
         {
-            rlMultMatrixf(MatrixToFloat(get_transform_matrix(t)));
+            rlMultMatrixf(board_matrix_f);
             rlScalef(b->board_scale, b->board_scale, b->board_scale);
             rlTranslatef(x, 0.0, z);
             rlScalef(b->item_scale, b->item_scale, b->item_scale);
             rlTranslatef(0.0, b->item_elevation, 0.0);
+
+            // Rotate dying item
+            if (item->state == ITEM_DYING) rlRotatef(TIME * 360.0, 0.0, 0.0, 1.0);
+
             rlRotatef(90.0, 1.0, 0.0, 0.0);
             item->matrix = rlGetMatrixTransform();
         }
