@@ -11,6 +11,23 @@ typedef struct Golova {
     Transform transform;
     Material material;
     Mesh mesh;
+
+    // Eyes
+    float eyes_scale;
+    float eyes_uplift;
+    float eyes_shift;
+    float eyes_spread;
+    Material eyes_material;
+
+    struct {
+        Texture2D texture;
+        Mesh mesh;
+    } eye_left;
+
+    struct {
+        Texture2D texture;
+        Mesh mesh;
+    } eye_right;
 } Golova;
 
 typedef enum ItemState {

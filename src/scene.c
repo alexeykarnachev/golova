@@ -9,13 +9,19 @@
 
 Scene SCENE;
 
+Material MATERIAL_DEFAULT;
+
 static void update_board_items(void);
 
 void load_scene(const char* file_path) {
-    // -------------------------------------------------------------------
-    // Initialize entities by default
+    MATERIAL_DEFAULT = LoadMaterialDefault();
+
     // Golova
     SCENE.golova.transform = get_default_transform();
+    SCENE.golova.eyes_scale = 0.056;
+    SCENE.golova.eyes_uplift = 0.027;
+    SCENE.golova.eyes_shift = 0.014;
+    SCENE.golova.eyes_spread = 0.252;
 
     // Board
     SCENE.board.transform = get_default_transform();
@@ -41,6 +47,10 @@ void load_scene(const char* file_path) {
 
         // Golova
         fread(&SCENE.golova.transform, sizeof(Transform), 1, f);
+        fread(&SCENE.golova.eyes_scale, sizeof(float), 1, f);
+        fread(&SCENE.golova.eyes_uplift, sizeof(float), 1, f);
+        fread(&SCENE.golova.eyes_shift, sizeof(float), 1, f);
+        fread(&SCENE.golova.eyes_spread, sizeof(float), 1, f);
 
         // Board
         fread(&SCENE.board.transform, sizeof(Transform), 1, f);
@@ -77,6 +87,22 @@ void load_scene(const char* file_path) {
     SCENE.golova.material.maps[0].texture = texture;
     SCENE.golova.mesh = GenMeshPlane((float)texture.width / texture.height, 1.0, 2, 2);
 
+    // Golova eyes
+    SCENE.golova.eyes_material = LoadMaterialDefault();
+    SCENE.golova.eyes_material.shader = LoadShader(0, "resources/shaders/sprite.frag");
+
+    texture = LoadTexture("resources/golova/sprites/eye_left.png");
+    SCENE.golova.eye_left.texture = texture;
+    SCENE.golova.eye_left.mesh = GenMeshPlane(
+        (float)texture.width / texture.height, 1.0, 2, 2
+    );
+
+    texture = LoadTexture("resources/golova/sprites/eye_right.png");
+    SCENE.golova.eye_right.texture = texture;
+    SCENE.golova.eye_right.mesh = GenMeshPlane(
+        (float)texture.width / texture.height, 1.0, 2, 2
+    );
+
     // Board
     SCENE.board.material = LoadMaterialDefault();
     SCENE.board.material.shader = LoadShader(0, "resources/shaders/board.frag");
@@ -93,6 +119,10 @@ void save_scene(const char* file_path) {
 
     // Golova
     fwrite(&SCENE.golova.transform, sizeof(Transform), 1, f);
+    fwrite(&SCENE.golova.eyes_scale, sizeof(float), 1, f);
+    fwrite(&SCENE.golova.eyes_uplift, sizeof(float), 1, f);
+    fwrite(&SCENE.golova.eyes_shift, sizeof(float), 1, f);
+    fwrite(&SCENE.golova.eyes_spread, sizeof(float), 1, f);
 
     // Board
     fwrite(&SCENE.board.transform, sizeof(Transform), 1, f);
@@ -139,6 +169,38 @@ void draw_scene(void) {
     draw_mesh_t(SCENE.golova.transform, SCENE.golova.material, SCENE.golova.mesh);
     draw_mesh_t(SCENE.board.transform, SCENE.board.material, SCENE.board.mesh);
 
+    // -------------------------------------------------------------------
+    // Eyes
+    Matrix mat = get_transform_matrix(SCENE.golova.transform);
+    float eyes_uplift = SCENE.golova.eyes_uplift;
+    float eyes_scale = SCENE.golova.eyes_scale;
+    float eyes_shift = SCENE.golova.eyes_shift;
+    float eyes_spread = SCENE.golova.eyes_spread;
+
+    Matrix s = MatrixScale(eyes_scale, eyes_scale, eyes_scale);
+    Matrix left_t = MatrixTranslate(-eyes_spread / 2.0 + eyes_shift, -0.01, -eyes_uplift);
+    Matrix right_t = MatrixTranslate(eyes_spread / 2.0 + eyes_shift, -0.01, -eyes_uplift);
+
+    Matrix left_mat = MatrixMultiply(s, MatrixMultiply(left_t, mat));
+    Matrix right_mat = MatrixMultiply(s, MatrixMultiply(right_t, mat));
+
+    Material material = SCENE.golova.eyes_material;
+
+    material.maps[0].texture = SCENE.golova.eye_left.texture;
+    draw_mesh_m(left_mat, material, SCENE.golova.eye_left.mesh);
+
+    material.maps[0].texture = SCENE.golova.eye_right.texture;
+    draw_mesh_m(right_mat, material, SCENE.golova.eye_right.mesh);
+
+    // Eyes background
+    s = MatrixScale(0.75, 1.0, 0.15);
+    Matrix t = MatrixTranslate(0.0, -0.02, -eyes_uplift);
+    Matrix eyes_background_mat = MatrixMultiply(s, MatrixMultiply(t, mat));
+
+    MATERIAL_DEFAULT.maps[0].color = LIGHTGRAY;
+    draw_mesh_m(eyes_background_mat, MATERIAL_DEFAULT, SCENE.golova.mesh);
+
+    // Items
     Shader item_shader = SCENE.board.item_material.shader;
     for (size_t i = 0; i < SCENE.board.n_items; ++i) {
         Item* item = &SCENE.board.items[i];
