@@ -12,7 +12,7 @@ out vec4 finalColor;
 void main() {
     float shadow = 0.0;
     if (u_with_shadows) {
-        shadow = sample_texture(texture0, shadow_uv, 87, 12).a;
+        shadow = blur_texture(texture0, shadow_uv).a;
     }
 
     vec3 color = vec3(0.5, 0.4, 0.5);

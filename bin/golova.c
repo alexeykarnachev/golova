@@ -12,10 +12,10 @@
 #define CIMGUI_DEFINE_ENUMS_AND_STRUCTS
 #include "cimgui.h"
 
-#define SCREEN_WIDTH 1024
-#define SCREEN_HEIGHT 768
-// #define SCREEN_WIDTH 2560
-// #define SCREEN_HEIGHT 1440
+// #define SCREEN_WIDTH 1024
+// #define SCREEN_HEIGHT 768
+#define SCREEN_WIDTH 2560
+#define SCREEN_HEIGHT 1440
 
 #define EYES_SPEED 0.08
 
