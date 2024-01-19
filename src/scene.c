@@ -78,6 +78,7 @@ void init_core(int screen_width, int screen_height) {
     SCENE.board.mesh = GenMeshPlane(1.0, 1.0, 2, 2);
     SCENE.board.item_material = LoadMaterialDefault();
     SCENE.board.item_material.shader = load_shader(0, "resources/shaders/item.frag");
+    SCENE.board.item_mesh = GenMeshPlane(1.0, 1.0, 2, 2);
 }
 
 void load_scene(const char* file_path) {
@@ -93,8 +94,6 @@ void load_scene(const char* file_path) {
     SCENE.board.item_elevation = 0.5;
     SCENE.board.board_scale = 0.7;
     SCENE.board.item_scale = 0.2;
-    SCENE.board.item_material = LoadMaterialDefault();
-    SCENE.board.item_mesh = GenMeshPlane(1.0, 1.0, 2, 2);
 
     // Camera
     SCENE.camera.fovy = 60.0;
@@ -191,20 +190,30 @@ void save_scene(const char* file_path) {
     fclose(f);
 }
 
-static void draw_items(void) {
-    Shader item_shader = SCENE.board.item_material.shader;
+static void draw_items(bool with_borders) {
+    Shader shader = SCENE.board.item_material.shader;
     for (size_t i = 0; i < SCENE.board.n_items; ++i) {
         Item* item = &SCENE.board.items[i];
         if (item->state == ITEM_DEAD) continue;
 
         SCENE.board.item_material.maps[0].texture = item->texture;
         int u_state = item->state;
-        SetShaderValue(
-            item_shader,
-            GetShaderLocation(item_shader, "u_state"),
-            &u_state,
-            SHADER_UNIFORM_INT
+
+        Vector4 color = {0.0};
+
+        if (with_borders) {
+            if (item->state == ITEM_HOT) color = (Vector4){1.0, 1.0, 0.0, 0.4};
+            else if (item->state == ITEM_ACTIVE) color = (Vector4){1.0, 1.0, 0.0, 1.0};
+        }
+
+        SetShaderValueV(
+            shader,
+            GetShaderLocation(shader, "u_border_color"),
+            (void*)(&color),
+            SHADER_UNIFORM_VEC4,
+            1
         );
+
         draw_mesh_m(item->matrix, SCENE.board.item_material, SCENE.board.item_mesh);
     }
 }
@@ -226,7 +235,7 @@ void draw_scene_ex(
         Matrix light_view = rlGetMatrixModelview();
         Matrix light_proj = rlGetMatrixProjection();
         light_vp = MatrixMultiply(light_view, light_proj);
-        draw_items();
+        draw_items(false);
         EndMode3D();
 
         EndTextureMode();
@@ -295,7 +304,7 @@ void draw_scene_ex(
     draw_mesh_m(eyes_background_mat, MATERIAL_DEFAULT, golova_mesh);
 
     // Items
-    draw_items();
+    draw_items(true);
 
     EndMode3D();
     EndTextureMode();
