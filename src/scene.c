@@ -141,6 +141,7 @@ void load_scene(const char* file_path) {
             fread(&item->matrix, sizeof(Matrix), 1, f);
             fread(&item->is_correct, sizeof(bool), 1, f);
             fread(&item->name, sizeof(item->name), 1, f);
+            item->state = ITEM_COLD;
 
             if (item->name[0] != '\0') {
                 static char fp[2048];

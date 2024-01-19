@@ -6,6 +6,7 @@
 #include "raylib.h"
 #include "raymath.h"
 #include "rlgl.h"
+#include <math.h>
 #include <stdio.h>
 
 #define CIMGUI_DEFINE_ENUMS_AND_STRUCTS
@@ -57,7 +58,7 @@ typedef struct Position {
      : (state == GAME_OVER)        ? "GAME_OVER" \
                                    : "UNKNOWN")
 
-static float GAME_STATE_TO_TIME[] = {5.0, 5.0, 0.0};
+static float GAME_STATE_TO_TIME[] = {2.0, 1.0, 0.0};
 
 static char* SCENES_DIR = "resources/scenes";
 static int CURR_SCENE_ID;
@@ -191,7 +192,8 @@ static void update_game(void) {
             rlScalef(b->board_scale, b->board_scale, b->board_scale);
             rlTranslatef(x, 0.0, z);
             rlScalef(b->item_scale, b->item_scale, b->item_scale);
-            rlTranslatef(0.0, b->item_elevation, 0.0);
+            float elevation_offset = 0.05 * (sinf(2.0 * TIME) + 1.0);
+            rlTranslatef(0.0, b->item_elevation + elevation_offset, 0.0);
 
             // Rotate dying item
             if (item->state == ITEM_DYING) rlRotatef(TIME * 360.0, 0.0, 0.0, 1.0);
