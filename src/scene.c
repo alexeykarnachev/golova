@@ -116,6 +116,9 @@ void load_scene(const char* file_path) {
         // Camera
         fread(&SCENE.camera, sizeof(Camera3D), 1, f);
 
+        // Light camera
+        fread(&SCENE.light_camera, sizeof(Camera3D), 1, f);
+
         // Golova
         fread(&SCENE.golova.transform, sizeof(Transform), 1, f);
         fread(&SCENE.golova.eyes_idle_scale, sizeof(float), 1, f);
@@ -159,6 +162,9 @@ void save_scene(const char* file_path) {
 
     // Camera
     fwrite(&SCENE.camera, sizeof(Camera3D), 1, f);
+
+    // Light camera
+    fwrite(&SCENE.light_camera, sizeof(Camera3D), 1, f);
 
     // Golova
     fwrite(&SCENE.golova.transform, sizeof(Transform), 1, f);

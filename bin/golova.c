@@ -456,6 +456,7 @@ static void draw_imgui(void) {
     ig_fix_window_top_left();
     if (igBegin("Debug info", NULL, GHOST_WINDOW_FLAGS)) {
         igText("scene_file_name: %s", SCENE_FILE_NAMES[CURR_SCENE_ID]);
+        igText("FPS: %d", GetFPS());
         igText("GAME_STATE: %s", GAME_STATE_TO_NAME(GAME_STATE));
         igText("PAUSE_STATE: %s", PAUSE_STATE_TO_NAME(PAUSE_STATE));
         igText("TIME_REMAINING: %.2f", TIME_REMAINING);
