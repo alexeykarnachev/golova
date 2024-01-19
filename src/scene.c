@@ -54,6 +54,15 @@ void init_core(int screen_width, int screen_height) {
         (float)texture.width / texture.height, 1.0, 2, 2
     );
 
+    // Golova cracks
+    texture = LoadTexture("resources/golova/sprites/golova_cracks.png");
+    SCENE.golova.cracks.material = LoadMaterialDefault();
+    SCENE.golova.cracks.material.shader = load_shader(0, "resources/shaders/sprite.frag");
+    SCENE.golova.cracks.material.maps[0].texture = texture;
+    SCENE.golova.cracks.mesh = GenMeshPlane(
+        (float)texture.width / texture.height, 1.0, 2, 2
+    );
+
     // Golova eyes
     SCENE.golova.eyes_material = LoadMaterialDefault();
     SCENE.golova.eyes_material.shader = load_shader(0, "resources/shaders/sprite.frag");
@@ -280,6 +289,14 @@ void draw_scene_ex(
         golova_material = SCENE.golova.eat.material;
     }
     draw_mesh_t(golova_transform, golova_material, golova_mesh);
+
+    // Golova cracks
+    Matrix cracks_matrix = get_transform_matrix(golova_transform);
+    cracks_matrix = MatrixMultiply(MatrixTranslate(0.0, 0.01, 0.0), cracks_matrix);
+    SCENE.golova.cracks.material.maps[0].color = MAGENTA;
+    SCENE.golova.cracks.material.maps[0].color.a = (int
+    )(SCENE.golova.cracks.strength * 255.0);
+    draw_mesh_m(cracks_matrix, SCENE.golova.cracks.material, SCENE.golova.cracks.mesh);
 
     // Golova Eyes
     float eyes_uplift = SCENE.golova.eyes_curr_uplift;

@@ -205,6 +205,11 @@ static void update_game(void) {
     }
 
     // -------------------------------------------------------------------
+    // Update Golova
+    int health = CLAMP(SCENE.board.n_misses_allowed, 0, 3);
+    SCENE.golova.cracks.strength = (3 - health) / 3.0f;
+
+    // -------------------------------------------------------------------
     // Update Golova gaze
     Vector3 target;
     bool has_target = false;

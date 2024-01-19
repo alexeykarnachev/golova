@@ -26,6 +26,12 @@ typedef struct Golova {
         Mesh mesh;
     } eat;
 
+    struct {
+        Material material;
+        Mesh mesh;
+        float strength;
+    } cracks;
+
     // Eyes
     float eyes_idle_scale;
     float eyes_idle_uplift;
