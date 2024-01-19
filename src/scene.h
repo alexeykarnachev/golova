@@ -95,7 +95,9 @@ typedef struct Board {
 typedef struct Scene {
     Golova golova;
     Board board;
+
     Camera3D camera;
+    Camera3D light_camera;
 } Scene;
 
 extern Scene SCENE;

@@ -5,8 +5,11 @@
 #include "raylib.h"
 #include "raymath.h"
 #include "rlgl.h"
+#include "utils.h"
 #include <math.h>
 #include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 
 #define SHADOWMAP_WIDTH 1024
 #define SHADOWMAP_HEIGHT 768
@@ -18,21 +21,25 @@ RenderTexture2D SCREEN;
 Material MATERIAL_DEFAULT;
 Shader POSTFX_SHADER;
 
+static char* load_shader_src(const char* file_path);
+static Shader load_shader(const char* vs_file_path, const char* fs_file_path);
+
 void init_core(int screen_width, int screen_height) {
     InitWindow(screen_width, screen_height, "Golova");
     SetTargetFPS(60);
 
     MATERIAL_DEFAULT = LoadMaterialDefault();
     SHADOWMAP = LoadRenderTexture(SHADOWMAP_WIDTH, SHADOWMAP_HEIGHT);
+    SetTextureWrap(SHADOWMAP.texture, TEXTURE_WRAP_CLAMP);
     SCREEN = LoadRenderTexture(screen_width, screen_height);
-    POSTFX_SHADER = LoadShader(0, "resources/shaders/postfx.frag");
+    POSTFX_SHADER = load_shader(0, "resources/shaders/postfx.frag");
 
     // -------------------------------------------------------------------
     // Load resources
     // Golova idle
     Texture2D texture = LoadTexture("resources/golova/sprites/golova_idle.png");
     SCENE.golova.idle.material = LoadMaterialDefault();
-    SCENE.golova.idle.material.shader = LoadShader(0, "resources/shaders/sprite.frag");
+    SCENE.golova.idle.material.shader = load_shader(0, "resources/shaders/sprite.frag");
     SCENE.golova.idle.material.maps[0].texture = texture;
     SCENE.golova.idle.mesh = GenMeshPlane(
         (float)texture.width / texture.height, 1.0, 2, 2
@@ -41,7 +48,7 @@ void init_core(int screen_width, int screen_height) {
     // Golova eat
     texture = LoadTexture("resources/golova/sprites/golova_eat.png");
     SCENE.golova.eat.material = LoadMaterialDefault();
-    SCENE.golova.eat.material.shader = LoadShader(0, "resources/shaders/sprite.frag");
+    SCENE.golova.eat.material.shader = load_shader(0, "resources/shaders/sprite.frag");
     SCENE.golova.eat.material.maps[0].texture = texture;
     SCENE.golova.eat.mesh = GenMeshPlane(
         (float)texture.width / texture.height, 1.0, 2, 2
@@ -49,7 +56,7 @@ void init_core(int screen_width, int screen_height) {
 
     // Golova eyes
     SCENE.golova.eyes_material = LoadMaterialDefault();
-    SCENE.golova.eyes_material.shader = LoadShader(0, "resources/shaders/sprite.frag");
+    SCENE.golova.eyes_material.shader = load_shader(0, "resources/shaders/sprite.frag");
 
     texture = LoadTexture("resources/golova/sprites/eye_left.png");
     SCENE.golova.eye_left.texture = texture;
@@ -65,12 +72,12 @@ void init_core(int screen_width, int screen_height) {
 
     // Board
     SCENE.board.material = LoadMaterialDefault();
-    SCENE.board.material.shader = LoadShader(
+    SCENE.board.material.shader = load_shader(
         "resources/shaders/board.vert", "resources/shaders/board.frag"
     );
     SCENE.board.mesh = GenMeshPlane(1.0, 1.0, 2, 2);
     SCENE.board.item_material = LoadMaterialDefault();
-    SCENE.board.item_material.shader = LoadShader(0, "resources/shaders/item.frag");
+    SCENE.board.item_material.shader = load_shader(0, "resources/shaders/item.frag");
 }
 
 void load_scene(const char* file_path) {
@@ -94,6 +101,13 @@ void load_scene(const char* file_path) {
     SCENE.camera.projection = CAMERA_PERSPECTIVE;
     SCENE.camera.position = (Vector3){0.0, 2.0, 2.0};
     SCENE.camera.up = (Vector3){0.0, 1.0, 0.0};
+
+    // Light camera
+    SCENE.light_camera.fovy = 1.0;
+    SCENE.light_camera.projection = CAMERA_ORTHOGRAPHIC;
+    SCENE.light_camera.up = (Vector3){0.0, 1.0, 0.0};
+    SCENE.light_camera.position = (Vector3){0.0, 1.0, -1.0};
+    SCENE.light_camera.target = Vector3Zero();
 
     // -------------------------------------------------------------------
     // Update entities from the scene save file
@@ -195,18 +209,6 @@ static void draw_items(void) {
     }
 }
 
-static Camera3D get_light_camera(void) {
-    Camera3D cam;
-    cam.projection = CAMERA_ORTHOGRAPHIC;
-    cam.fovy = 1.0;
-    cam.position = SCENE.golova.transform.translation;
-    cam.position.y += 0.8;
-    cam.position.z -= 0.2;
-    cam.target = Vector3Zero();
-    cam.up = (Vector3){0.0, 1.0, 0.0};
-    return cam;
-}
-
 void draw_scene(bool with_shadows) {
     draw_scene_ex(SCREEN, BLACK, SCENE.camera, with_shadows);
 }
@@ -220,7 +222,7 @@ void draw_scene_ex(
         rlDisableBackfaceCulling();
 
         ClearBackground(BLANK);
-        BeginMode3D(get_light_camera());
+        BeginMode3D(SCENE.light_camera);
         Matrix light_view = rlGetMatrixModelview();
         Matrix light_proj = rlGetMatrixProjection();
         light_vp = MatrixMultiply(light_view, light_proj);
@@ -319,4 +321,43 @@ void draw_postfx_ex(Texture2D texture, bool with_blur) {
 
 void draw_postfx(bool with_blur) {
     draw_postfx_ex(SCREEN.texture, with_blur);
+}
+
+static char* load_shader_src(const char* file_path) {
+    long size;
+
+    static char* version = "#version 330";
+    char* common = read_cstr_file("resources/shaders/common.glsl", "r", &size);
+
+    char* text = read_cstr_file(file_path, "r", &size);
+    char* src = malloc(strlen(version) + strlen(common) + strlen(text) + 6);
+
+    size_t p = 0;
+    strcpy(&src[p], version);
+    p += strlen(version);
+    src[p] = '\n';
+    p += 1;
+    strcpy(&src[p], common);
+    p += strlen(common);
+    src[p] = '\n';
+    p += 1;
+    strcpy(&src[p], text);
+
+    free(common);
+    free(text);
+
+    return src;
+}
+
+static Shader load_shader(const char* vs_file_path, const char* fs_file_path) {
+    char* vs = NULL;
+    char* fs = NULL;
+
+    if (vs_file_path) vs = load_shader_src(vs_file_path);
+    if (fs_file_path) fs = load_shader_src(fs_file_path);
+    Shader shader = LoadShaderFromMemory(vs, fs);
+
+    if (vs) free(vs);
+    if (fs) free(fs);
+    return shader;
 }

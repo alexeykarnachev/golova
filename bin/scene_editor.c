@@ -43,6 +43,7 @@ typedef struct CameraShell {
     Transform transform;
     Material material;
     Mesh mesh;
+    Camera3D* camera;
 } CameraShell;
 
 static RenderTexture2D FULL_SCREEN;
@@ -51,6 +52,7 @@ static RenderTexture2D PREVIEW_SCREEN_POSTFX;
 static RGizmo GIZMO;
 static Camera3D CAMERA;
 static CameraShell CAMERA_SHELL;
+static CameraShell LIGHT_CAMERA_SHELL;
 
 static char SCENE_FILE_PATH[2048];
 
@@ -75,18 +77,18 @@ static Transform* get_picked_transform(void);
 static void* get_picked_entity(void);
 static EntityType get_picked_entity_type(void);
 
-static void reset_camera_shell(void);
+static void reset_camera_shells();
 static void update_scene_save_load(void);
 static void update_collision_infos(void);
 static void update_input(void);
 static void update_board_items(void);
 static void update_picking(void);
-static void update_camera_shell(void);
+static void update_camera_shells();
 static void update_camera(void);
 static void update_gizmo(void);
 static void set_board_values(int n_items, int n_hits_required, int n_misses_allowed);
 static void draw_editor_grid(void);
-static void draw_camera_shell(void);
+static void draw_camera_shells(void);
 static void draw_item_boxes(void);
 static void draw_imgui(void);
 
@@ -104,7 +106,14 @@ int main(void) {
     CAMERA_SHELL.mesh = GenMeshSphere(0.15, 16, 16);
     CAMERA_SHELL.material = LoadMaterialDefault();
     CAMERA_SHELL.material.maps[0].color = RAYWHITE;
-    reset_camera_shell();
+    CAMERA_SHELL.camera = &SCENE.camera;
+
+    LIGHT_CAMERA_SHELL.mesh = GenMeshSphere(0.15, 16, 16);
+    LIGHT_CAMERA_SHELL.material = LoadMaterialDefault();
+    LIGHT_CAMERA_SHELL.material.maps[0].color = YELLOW;
+    LIGHT_CAMERA_SHELL.camera = &SCENE.light_camera;
+
+    reset_camera_shells();
 
     CAMERA.fovy = 60.0;
     CAMERA.position = (Vector3){5.0, 5.0, 5.0};
@@ -118,7 +127,7 @@ int main(void) {
         update_board_items();
         update_gizmo();
         update_camera();
-        update_camera_shell();
+        update_camera_shells();
         update_picking();
 
         // Draw main editor screen
@@ -134,7 +143,7 @@ int main(void) {
 
         BeginMode3D(CAMERA);
         rlSetLineWidth(3.0);
-        draw_camera_shell();
+        draw_camera_shells();
         draw_item_boxes();
         EndMode3D();
 
@@ -182,13 +191,17 @@ static EntityType get_picked_entity_type(void) {
     return PICKED_COLLISION_INFO->entity_type;
 }
 
-static void reset_camera_shell(void) {
-    CAMERA_SHELL.transform = get_default_transform();
-    CAMERA_SHELL.transform.translation = SCENE.camera.position;
-    CAMERA_SHELL.transform.rotation = QuaternionFromVector3ToVector3(
-        (Vector3){0.0, 0.0, -1.0},
-        Vector3Subtract(SCENE.camera.target, SCENE.camera.position)
-    );
+static void reset_camera_shells(void) {
+    CameraShell* shells[2] = {&CAMERA_SHELL, &LIGHT_CAMERA_SHELL};
+    for (size_t i = 0; i < 2; ++i) {
+        CameraShell* shell = shells[i];
+        shell->transform = get_default_transform();
+        shell->transform.translation = shell->camera->position;
+        Vector3 dir = Vector3Subtract(shell->camera->target, shell->camera->position);
+        shell->transform.rotation = QuaternionFromVector3ToVector3(
+            (Vector3){0.0, 0.0, -1.0}, Vector3Normalize(dir)
+        );
+    }
 }
 
 static void update_scene_save_load(void) {
@@ -210,7 +223,7 @@ static void update_scene_save_load(void) {
         char* fp = open_nfd("resources/scenes", filter, 1);
         if (fp != NULL) {
             load_scene(fp);
-            reset_camera_shell();
+            reset_camera_shells();
             strcpy(SCENE_FILE_PATH, fp);
         }
     }
@@ -230,6 +243,10 @@ static void update_collision_infos(void) {
     COLLISION_INFOS[N_COLLISION_INFOS].entity_type = CAMERA_SHELL_TYPE;
     COLLISION_INFOS[N_COLLISION_INFOS].transform = &CAMERA_SHELL.transform;
     COLLISION_INFOS[N_COLLISION_INFOS++].mesh = CAMERA_SHELL.mesh;
+
+    COLLISION_INFOS[N_COLLISION_INFOS].entity_type = CAMERA_SHELL_TYPE;
+    COLLISION_INFOS[N_COLLISION_INFOS].transform = &LIGHT_CAMERA_SHELL.transform;
+    COLLISION_INFOS[N_COLLISION_INFOS++].mesh = LIGHT_CAMERA_SHELL.mesh;
 
     for (size_t i = 0; i < SCENE.board.n_items; ++i) {
         Item* item = &SCENE.board.items[i];
@@ -348,12 +365,16 @@ static void update_picking(void) {
     }
 }
 
-static void update_camera_shell(void) {
-    SCENE.camera.position = CAMERA_SHELL.transform.translation;
-    Vector3 dir = Vector3RotateByQuaternion(
-        (Vector3){0.0, 0.0, -1.0}, CAMERA_SHELL.transform.rotation
-    );
-    SCENE.camera.target = Vector3Add(SCENE.camera.position, dir);
+static void update_camera_shells(void) {
+    CameraShell* shells[2] = {&CAMERA_SHELL, &LIGHT_CAMERA_SHELL};
+    for (size_t i = 0; i < 2; ++i) {
+        CameraShell* shell = shells[i];
+        shell->camera->position = shell->transform.translation;
+        Vector3 dir = Vector3RotateByQuaternion(
+            (Vector3){0.0, 0.0, -1.0}, shell->transform.rotation
+        );
+        shell->camera->target = Vector3Add(shell->camera->position, dir);
+    }
 }
 
 static void set_board_values(int n_items, int n_hits_required, int n_misses_allowed) {
@@ -387,14 +408,18 @@ static void draw_editor_grid(void) {
     EndMode3D();
 }
 
-static void draw_camera_shell(void) {
-    draw_mesh_t(CAMERA_SHELL.transform, CAMERA_SHELL.material, CAMERA_SHELL.mesh);
+static void draw_camera_shells(void) {
+    CameraShell* shells[2] = {&CAMERA_SHELL, &LIGHT_CAMERA_SHELL};
+    for (size_t i = 0; i < 2; ++i) {
+        CameraShell* shell = shells[i];
+        draw_mesh_t(shell->transform, shell->material, shell->mesh);
 
-    Vector3 start = SCENE.camera.position;
-    Vector3 target = SCENE.camera.target;
-    Vector3 dir = Vector3Normalize(Vector3Subtract(target, start));
-    Vector3 end = Vector3Add(start, Vector3Scale(dir, 0.8));
-    DrawLine3D(start, end, RAYWHITE);
+        Vector3 start = shell->camera->position;
+        Vector3 target = shell->camera->target;
+        Vector3 dir = Vector3Normalize(Vector3Subtract(target, start));
+        Vector3 end = Vector3Add(start, Vector3Scale(dir, 0.8));
+        DrawLine3D(start, end, shell->material.maps[0].color);
+    }
 }
 
 static void draw_item_boxes(void) {
@@ -424,7 +449,18 @@ static void draw_imgui(void) {
         }
 
         if (ig_collapsing_header("Camera", true)) {
-            igDragFloat("FOV", &SCENE.camera.fovy, 1.0, 10.0, 170.0, "%.1f", 0);
+            igDragFloat("FOV##camera", &SCENE.camera.fovy, 1.0, 10.0, 170.0, "%.1f", 0);
+        }
+
+        if (ig_collapsing_header("Light camera", true)) {
+            igDragFloat(
+                "FOV##light_camera", &SCENE.light_camera.fovy, 1.0, 1.0, 170.0, "%.1f", 0
+            );
+            if (SCENE.light_camera.fovy == 1.0) {
+                SCENE.light_camera.projection = CAMERA_ORTHOGRAPHIC;
+            } else {
+                SCENE.light_camera.projection = CAMERA_PERSPECTIVE;
+            }
         }
 
         if (ig_collapsing_header("Golova", true)) {
