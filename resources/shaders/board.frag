@@ -4,23 +4,19 @@ in vec4 fragColor;
 
 uniform sampler2D texture0;
 uniform vec4 colDiffuse;
-uniform int u_with_shadows;
+
+uniform bool u_with_shadows;
 
 out vec4 finalColor;
 
 void main() {
-    bool is_shadow = false;
-    bool with_shadows = u_with_shadows == 1;
-
-    if (with_shadows) {
-        vec4 shadow = texture(texture0, shadow_uv);
-        is_shadow = shadow.a > 0.1;
+    float shadow = 0.0;
+    if (u_with_shadows) {
+        shadow = sample_texture(texture0, shadow_uv, 87, 6).a;
     }
 
-    if (is_shadow) {
-        finalColor = vec4(0.0, 0.0, 0.0, 1.0);
-    } else {
-        finalColor = vec4(0.8, 0.8, 0.8, 1.0);
-    }
+    vec3 color = vec3(0.8, 0.8, 0.8);
+    color *= (1.0 - shadow);
+    finalColor = vec4(color, 1.0);
 }
 

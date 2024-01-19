@@ -10,16 +10,16 @@ vec2 sample_poisson_disc(vec2 seed, int idx) {
     return POISSON_DISK[idx];
 }
 
-vec3 sample_texture(sampler2D tex, vec2 uv, float n_samples, float radius) {
+vec4 sample_texture(sampler2D tex, vec2 uv, float n_samples, float radius) {
     ivec2 size = textureSize(tex, 0);
     vec2 uv_step = 1.0 / vec2(size);
-    vec3 color = vec3(0.0);
+    vec4 color = vec4(0.0);
     float n = 0.0;
     for(int i = 0; i < int(n_samples); ++i) {
         vec2 disc = sample_poisson_disc(uv, i);
         vec2 uv_ = uv + radius * uv_step * disc;
         if(uv_.x >= 0.0 && uv_.x <= 1.0 && uv_.y >= 0.0 && uv_.y <= 1.0) {
-            color += texture(tex, uv_).rgb;
+            color += texture(tex, uv_);
             n += 1.0;
         }
     }
