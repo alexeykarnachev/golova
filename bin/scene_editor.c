@@ -47,6 +47,7 @@ typedef struct CameraShell {
 
 static RenderTexture2D FULL_SCREEN;
 static RenderTexture2D PREVIEW_SCREEN;
+static RenderTexture2D PREVIEW_SCREEN_POSTFX;
 static RGizmo GIZMO;
 static Camera3D CAMERA;
 static CameraShell CAMERA_SHELL;
@@ -66,6 +67,9 @@ static Vector2 MOUSE_DELTA;
 
 static int IG_ID;
 static bool IS_IG_INTERACTED;
+
+static bool WITH_SHADOWS = true;
+static bool WITH_BLUR = false;
 
 static Transform* get_picked_transform(void);
 static void* get_picked_entity(void);
@@ -87,13 +91,14 @@ static void draw_item_boxes(void);
 static void draw_imgui(void);
 
 int main(void) {
-    InitWindow(SCREEN_WIDTH, SCREEN_HEIGHT, "Editor");
-    SetTargetFPS(60);
-    load_scene(NULL);
+    init_core(SCREEN_WIDTH, SCREEN_HEIGHT);
+    // load_scene(NULL);
+    load_scene("resources/scenes/0000.scn");
     load_imgui();
 
     FULL_SCREEN = LoadRenderTexture(SCREEN_WIDTH, SCREEN_HEIGHT);
     PREVIEW_SCREEN = LoadRenderTexture(SCREEN_WIDTH / 3, SCREEN_HEIGHT / 3);
+    PREVIEW_SCREEN_POSTFX = LoadRenderTexture(SCREEN_WIDTH / 3, SCREEN_HEIGHT / 3);
     GIZMO = rgizmo_create();
 
     CAMERA_SHELL.mesh = GenMeshSphere(0.15, 16, 16);
@@ -117,8 +122,9 @@ int main(void) {
         update_picking();
 
         // Draw main editor screen
+        draw_scene_ex(FULL_SCREEN, DARKGRAY, CAMERA, WITH_SHADOWS);
+
         BeginTextureMode(FULL_SCREEN);
-        ClearBackground(DARKGRAY);
         rlDisableBackfaceCulling();
 
         BeginMode3D(CAMERA);
@@ -128,7 +134,6 @@ int main(void) {
 
         BeginMode3D(CAMERA);
         rlSetLineWidth(3.0);
-        draw_scene();
         draw_camera_shell();
         draw_item_boxes();
         EndMode3D();
@@ -139,26 +144,23 @@ int main(void) {
         }
         EndMode3D();
 
-        begin_imgui();
         draw_imgui();
-        end_imgui();
 
         EndTextureMode();
 
         // Draw scene preview screen
-        BeginTextureMode(PREVIEW_SCREEN);
-        ClearBackground(BLACK);
         rlEnableBackfaceCulling();
-        BeginMode3D(SCENE.camera);
-        draw_scene();
-        EndMode3D();
+        draw_scene_ex(PREVIEW_SCREEN, BLACK, SCENE.camera, WITH_SHADOWS);
+
+        BeginTextureMode(PREVIEW_SCREEN_POSTFX);
+        draw_postfx_ex(PREVIEW_SCREEN.texture, WITH_BLUR);
         EndTextureMode();
 
         // Blit screens
         BeginDrawing();
         ClearBackground(BLANK);
         draw_screen(FULL_SCREEN);
-        draw_screen_top_right(PREVIEW_SCREEN);
+        draw_screen_top_right(PREVIEW_SCREEN_POSTFX);
         EndDrawing();
     }
 
@@ -207,7 +209,6 @@ static void update_scene_save_load(void) {
     } else if (is_load_pressed) {
         char* fp = open_nfd("resources/scenes", filter, 1);
         if (fp != NULL) {
-            unload_scene();
             load_scene(fp);
             reset_camera_shell();
             strcpy(SCENE_FILE_PATH, fp);
@@ -409,12 +410,19 @@ static void draw_item_boxes(void) {
 }
 
 static void draw_imgui(void) {
+    begin_imgui();
+
     IG_ID = 1;
     ImGuiIO* io = igGetIO();
     IS_IG_INTERACTED = io->WantCaptureMouse || io->WantCaptureKeyboard;
 
     ig_fix_window_top_left();
     if (igBegin("Inspector", NULL, 0)) {
+        if (ig_collapsing_header("Debug", true)) {
+            igCheckbox("WITH_SHADOWS", &WITH_SHADOWS);
+            igCheckbox("WITH_BLUR", &WITH_BLUR);
+        }
+
         if (ig_collapsing_header("Camera", true)) {
             igDragFloat("FOV", &SCENE.camera.fovy, 1.0, 10.0, 170.0, "%.1f", 0);
         }
@@ -503,4 +511,6 @@ static void draw_imgui(void) {
         igText("Scene: %s", SCENE_FILE_PATH);
     }
     igEnd();
+
+    end_imgui();
 }

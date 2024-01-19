@@ -8,13 +8,72 @@
 #include <math.h>
 #include <stdio.h>
 
+#define SHADOWMAP_WIDTH 1024
+#define SHADOWMAP_HEIGHT 768
+
 Scene SCENE;
 
+RenderTexture2D SHADOWMAP;
+RenderTexture2D SCREEN;
 Material MATERIAL_DEFAULT;
+Shader POSTFX_SHADER;
+
+void init_core(int screen_width, int screen_height) {
+    InitWindow(screen_width, screen_height, "Golova");
+    SetTargetFPS(60);
+
+    MATERIAL_DEFAULT = LoadMaterialDefault();
+    SHADOWMAP = LoadRenderTexture(SHADOWMAP_WIDTH, SHADOWMAP_HEIGHT);
+    SCREEN = LoadRenderTexture(screen_width, screen_height);
+    POSTFX_SHADER = LoadShader(0, "resources/shaders/postfx.frag");
+
+    // -------------------------------------------------------------------
+    // Load resources
+    // Golova idle
+    Texture2D texture = LoadTexture("resources/golova/sprites/golova_idle.png");
+    SCENE.golova.idle.material = LoadMaterialDefault();
+    SCENE.golova.idle.material.shader = LoadShader(0, "resources/shaders/sprite.frag");
+    SCENE.golova.idle.material.maps[0].texture = texture;
+    SCENE.golova.idle.mesh = GenMeshPlane(
+        (float)texture.width / texture.height, 1.0, 2, 2
+    );
+
+    // Golova eat
+    texture = LoadTexture("resources/golova/sprites/golova_eat.png");
+    SCENE.golova.eat.material = LoadMaterialDefault();
+    SCENE.golova.eat.material.shader = LoadShader(0, "resources/shaders/sprite.frag");
+    SCENE.golova.eat.material.maps[0].texture = texture;
+    SCENE.golova.eat.mesh = GenMeshPlane(
+        (float)texture.width / texture.height, 1.0, 2, 2
+    );
+
+    // Golova eyes
+    SCENE.golova.eyes_material = LoadMaterialDefault();
+    SCENE.golova.eyes_material.shader = LoadShader(0, "resources/shaders/sprite.frag");
+
+    texture = LoadTexture("resources/golova/sprites/eye_left.png");
+    SCENE.golova.eye_left.texture = texture;
+    SCENE.golova.eye_left.mesh = GenMeshPlane(
+        (float)texture.width / texture.height, 1.0, 2, 2
+    );
+
+    texture = LoadTexture("resources/golova/sprites/eye_right.png");
+    SCENE.golova.eye_right.texture = texture;
+    SCENE.golova.eye_right.mesh = GenMeshPlane(
+        (float)texture.width / texture.height, 1.0, 2, 2
+    );
+
+    // Board
+    SCENE.board.material = LoadMaterialDefault();
+    SCENE.board.material.shader = LoadShader(
+        "resources/shaders/board.vert", "resources/shaders/board.frag"
+    );
+    SCENE.board.mesh = GenMeshPlane(1.0, 1.0, 2, 2);
+    SCENE.board.item_material = LoadMaterialDefault();
+    SCENE.board.item_material.shader = LoadShader(0, "resources/shaders/item.frag");
+}
 
 void load_scene(const char* file_path) {
-    MATERIAL_DEFAULT = LoadMaterialDefault();
-
     // Golova
     SCENE.golova.transform = get_default_transform();
     SCENE.golova.eyes_idle_scale = 0.056;
@@ -70,6 +129,7 @@ void load_scene(const char* file_path) {
             if (item->name[0] != '\0') {
                 static char fp[2048];
                 sprintf(fp, "resources/items/sprites/%s.png", item->name);
+                if (IsTextureReady(item->texture)) UnloadTexture(item->texture);
                 item->texture = LoadTexture(fp);
             }
         }
@@ -79,49 +139,6 @@ void load_scene(const char* file_path) {
 
     SCENE.golova.eyes_curr_shift = SCENE.golova.eyes_idle_shift;
     SCENE.golova.eyes_curr_uplift = SCENE.golova.eyes_idle_uplift;
-
-    // -------------------------------------------------------------------
-    // Load resources
-    // Golova idle
-    Texture2D texture = LoadTexture("resources/golova/sprites/golova_idle.png");
-    SCENE.golova.idle.material = LoadMaterialDefault();
-    SCENE.golova.idle.material.shader = LoadShader(0, "resources/shaders/sprite.frag");
-    SCENE.golova.idle.material.maps[0].texture = texture;
-    SCENE.golova.idle.mesh = GenMeshPlane(
-        (float)texture.width / texture.height, 1.0, 2, 2
-    );
-
-    // Golova eat
-    texture = LoadTexture("resources/golova/sprites/golova_eat.png");
-    SCENE.golova.eat.material = LoadMaterialDefault();
-    SCENE.golova.eat.material.shader = LoadShader(0, "resources/shaders/sprite.frag");
-    SCENE.golova.eat.material.maps[0].texture = texture;
-    SCENE.golova.eat.mesh = GenMeshPlane(
-        (float)texture.width / texture.height, 1.0, 2, 2
-    );
-
-    // Golova eyes
-    SCENE.golova.eyes_material = LoadMaterialDefault();
-    SCENE.golova.eyes_material.shader = LoadShader(0, "resources/shaders/sprite.frag");
-
-    texture = LoadTexture("resources/golova/sprites/eye_left.png");
-    SCENE.golova.eye_left.texture = texture;
-    SCENE.golova.eye_left.mesh = GenMeshPlane(
-        (float)texture.width / texture.height, 1.0, 2, 2
-    );
-
-    texture = LoadTexture("resources/golova/sprites/eye_right.png");
-    SCENE.golova.eye_right.texture = texture;
-    SCENE.golova.eye_right.mesh = GenMeshPlane(
-        (float)texture.width / texture.height, 1.0, 2, 2
-    );
-
-    // Board
-    SCENE.board.material = LoadMaterialDefault();
-    SCENE.board.material.shader = LoadShader(0, "resources/shaders/board.frag");
-    SCENE.board.mesh = GenMeshPlane(1.0, 1.0, 2, 2);
-    SCENE.board.item_material = LoadMaterialDefault();
-    SCENE.board.item_material.shader = LoadShader(0, "resources/shaders/item.frag");
 }
 
 void save_scene(const char* file_path) {
@@ -160,28 +177,78 @@ void save_scene(const char* file_path) {
     fclose(f);
 }
 
-void unload_scene(void) {
-    UnloadMesh(SCENE.golova.idle.mesh);
-    UnloadMesh(SCENE.golova.eat.mesh);
-    UnloadMesh(SCENE.board.mesh);
-    UnloadMesh(SCENE.board.item_mesh);
-    UnloadMaterial(SCENE.golova.idle.material);
-    UnloadMaterial(SCENE.golova.eat.material);
-    UnloadMaterial(SCENE.board.material);
-    UnloadMaterial(SCENE.board.item_material);
+static void draw_items(void) {
+    Shader item_shader = SCENE.board.item_material.shader;
     for (size_t i = 0; i < SCENE.board.n_items; ++i) {
         Item* item = &SCENE.board.items[i];
-        UnloadTexture(item->texture);
+        if (item->state == ITEM_DEAD) continue;
+
+        SCENE.board.item_material.maps[0].texture = item->texture;
+        int u_state = item->state;
+        SetShaderValue(
+            item_shader,
+            GetShaderLocation(item_shader, "u_state"),
+            &u_state,
+            SHADER_UNIFORM_INT
+        );
+        draw_mesh_m(item->matrix, SCENE.board.item_material, SCENE.board.item_mesh);
     }
-    SCENE = (Scene){0};
 }
 
-void draw_scene(void) {
-    // -------------------------------------------------------------------
-    // Board
-    draw_mesh_t(SCENE.board.transform, SCENE.board.material, SCENE.board.mesh);
+static Camera3D get_light_camera(void) {
+    Camera3D cam;
+    cam.projection = CAMERA_ORTHOGRAPHIC;
+    cam.fovy = 1.0;
+    cam.position = SCENE.golova.transform.translation;
+    cam.position.y += 0.8;
+    cam.position.z -= 0.2;
+    cam.target = Vector3Zero();
+    cam.up = (Vector3){0.0, 1.0, 0.0};
+    return cam;
+}
+
+void draw_scene(bool with_shadows) {
+    draw_scene_ex(SCREEN, BLACK, SCENE.camera, with_shadows);
+}
+
+void draw_scene_ex(
+    RenderTexture2D screen, Color clear_color, Camera3D camera, bool with_shadows
+) {
+    Matrix light_vp;
+    if (with_shadows) {
+        BeginTextureMode(SHADOWMAP);
+        rlDisableBackfaceCulling();
+
+        ClearBackground(BLANK);
+        BeginMode3D(get_light_camera());
+        Matrix light_view = rlGetMatrixModelview();
+        Matrix light_proj = rlGetMatrixProjection();
+        light_vp = MatrixMultiply(light_view, light_proj);
+        draw_items();
+        EndMode3D();
+
+        EndTextureMode();
+    }
 
     // -------------------------------------------------------------------
+    // Draw scene
+    BeginTextureMode(screen);
+    ClearBackground(clear_color);
+    BeginMode3D(camera);
+
+    // Board
+    Shader shader = SCENE.board.material.shader;
+    SCENE.board.material.maps[0].texture = SHADOWMAP.texture;
+    SetShaderValueMatrix(shader, GetShaderLocation(shader, "u_light_vp"), light_vp);
+    int u_with_shadows = (int)with_shadows;
+    SetShaderValue(
+        shader,
+        GetShaderLocation(shader, "u_with_shadows"),
+        &u_with_shadows,
+        SHADER_UNIFORM_INT
+    );
+    draw_mesh_t(SCENE.board.transform, SCENE.board.material, SCENE.board.mesh);
+
     // Golova
     Transform golova_transform = SCENE.golova.transform;
     Matrix golova_mat = get_transform_matrix(golova_transform);
@@ -196,7 +263,6 @@ void draw_scene(void) {
     }
     draw_mesh_t(golova_transform, golova_material, golova_mesh);
 
-    // -------------------------------------------------------------------
     // Golova Eyes
     float eyes_uplift = SCENE.golova.eyes_curr_uplift;
     float eyes_shift = SCENE.golova.eyes_curr_shift;
@@ -227,19 +293,30 @@ void draw_scene(void) {
     draw_mesh_m(eyes_background_mat, MATERIAL_DEFAULT, golova_mesh);
 
     // Items
-    Shader item_shader = SCENE.board.item_material.shader;
-    for (size_t i = 0; i < SCENE.board.n_items; ++i) {
-        Item* item = &SCENE.board.items[i];
-        if (item->state == ITEM_DEAD) continue;
+    draw_items();
 
-        SCENE.board.item_material.maps[0].texture = item->texture;
-        int u_state = item->state;
-        SetShaderValue(
-            item_shader,
-            GetShaderLocation(item_shader, "u_state"),
-            &u_state,
-            SHADER_UNIFORM_INT
-        );
-        draw_mesh_m(item->matrix, SCENE.board.item_material, SCENE.board.item_mesh);
-    }
+    EndMode3D();
+    EndTextureMode();
+}
+
+void draw_postfx_ex(Texture2D texture, bool with_blur) {
+    BeginShaderMode(POSTFX_SHADER);
+    int u_with_blur = (int)with_blur;
+    SetShaderValue(
+        POSTFX_SHADER,
+        GetShaderLocation(POSTFX_SHADER, "u_with_blur"),
+        &u_with_blur,
+        SHADER_UNIFORM_INT
+    );
+    DrawTextureRec(
+        texture,
+        (Rectangle){0, 0, (float)texture.width, (float)-texture.height},
+        (Vector2){0, 0},
+        WHITE
+    );
+    EndShaderMode();
+}
+
+void draw_postfx(bool with_blur) {
+    draw_postfx_ex(SCREEN.texture, with_blur);
 }

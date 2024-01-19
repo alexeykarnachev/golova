@@ -100,7 +100,12 @@ typedef struct Scene {
 
 extern Scene SCENE;
 
+void init_core(int screen_width, int screen_height);
 void load_scene(const char* file_path);
 void save_scene(const char* file_path);
-void unload_scene(void);
-void draw_scene(void);
+void draw_scene(bool with_shadows);
+void draw_scene_ex(
+    RenderTexture2D screen, Color clear_color, Camera3D camera, bool with_shadows
+);
+void draw_postfx(bool is_blured);
+void draw_postfx_ex(Texture2D texture, bool is_blured);

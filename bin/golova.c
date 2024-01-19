@@ -44,9 +44,6 @@ typedef struct Position {
     Pivot pivot;
 } Position;
 
-static RenderTexture2D SCREEN;
-static Shader POSTFX_SHADER;
-
 #define PAUSE_STATE_TO_NAME(state) \
     ((state == NOT_PAUSED)      ? "NOT_PAUSED" \
      : (state == MAIN_PAUSE)    ? "MAIN_PAUSE" \
@@ -74,6 +71,7 @@ static GameState NEXT_GAME_STATE;
 static float TIME_REMAINING;
 static bool IS_NEXT_SCENE;
 static bool IS_EXIT_GAME;
+static bool IS_BLURED;
 
 static float DT;
 static float TIME;
@@ -90,7 +88,6 @@ static float EYES_TARGET_UPLIFT;
 
 static void load_curr_scene(void);
 static void update_game(void);
-static void draw_postfx(void);
 static void draw_ggui(void);
 static void draw_imgui(void);
 
@@ -104,11 +101,7 @@ static void update_value2(
 );
 
 int main(void) {
-    InitWindow(SCREEN_WIDTH, SCREEN_HEIGHT, "Golova");
-    SetTargetFPS(60);
-
-    SCREEN = LoadRenderTexture(SCREEN_WIDTH, SCREEN_HEIGHT);
-    POSTFX_SHADER = LoadShader(0, "resources/shaders/postfx.frag");
+    init_core(SCREEN_WIDTH, SCREEN_HEIGHT);
     SCENE_FILE_NAMES = get_file_names_in_dir(SCENES_DIR, &N_SCENES);
 
     load_curr_scene();
@@ -117,26 +110,13 @@ int main(void) {
     while (!IS_EXIT_GAME) {
         update_game();
 
-        // Draw main scene
-        BeginTextureMode(SCREEN);
-        ClearBackground(BLACK);
+        draw_scene(true);
 
-        BeginMode3D(SCENE.camera);
-        draw_scene();
-        EndMode3D();
-
-        EndTextureMode();
-
-        // Draw ui and postfx
+        // Draw postfx and ui
         BeginDrawing();
-
-        draw_postfx();
+        draw_postfx(IS_BLURED);
         draw_ggui();
-
-        begin_imgui();
         draw_imgui();
-        end_imgui();
-
         EndDrawing();
     }
 
@@ -147,7 +127,6 @@ static void load_curr_scene(void) {
     static char fp[2048];
     sprintf(fp, "%s/%s", SCENES_DIR, SCENE_FILE_NAMES[CURR_SCENE_ID]);
 
-    unload_scene();
     load_scene(fp);
 
     NEXT_GAME_STATE = PLAYER_IS_PICKING;
@@ -185,6 +164,7 @@ static void update_game(void) {
     }
 
     PAUSE_STATE = NEXT_PAUSE_STATE;
+    IS_BLURED = PAUSE_STATE > 0 || GAME_STATE == SCENE_OVER || GAME_STATE == GAME_OVER;
 
     // -------------------------------------------------------------------
     // Update board items
@@ -371,25 +351,6 @@ static void update_game(void) {
     }
 }
 
-static void draw_postfx(void) {
-    BeginShaderMode(POSTFX_SHADER);
-    int is_blured = PAUSE_STATE > 0 || GAME_STATE == SCENE_OVER
-                    || GAME_STATE == GAME_OVER;
-    SetShaderValue(
-        POSTFX_SHADER,
-        GetShaderLocation(POSTFX_SHADER, "u_is_blured"),
-        &is_blured,
-        SHADER_UNIFORM_INT
-    );
-    DrawTextureRec(
-        SCREEN.texture,
-        (Rectangle){0, 0, (float)SCREEN.texture.width, (float)-SCREEN.texture.height},
-        (Vector2){0, 0},
-        WHITE
-    );
-    EndShaderMode();
-}
-
 static void draw_ggui(void) {
     int screen_height = GetScreenHeight();
     int screen_width = GetScreenWidth();
@@ -491,6 +452,7 @@ static void ggui_text(Position pos, const char* text, int font_size, Color color
 }
 
 static void draw_imgui(void) {
+    begin_imgui();
     ig_fix_window_top_left();
     if (igBegin("Debug info", NULL, GHOST_WINDOW_FLAGS)) {
         igText("scene_file_name: %s", SCENE_FILE_NAMES[CURR_SCENE_ID]);
@@ -511,6 +473,7 @@ static void draw_imgui(void) {
         igText("picked_item_state: %s", picked_item_state);
     }
     igEnd();
+    end_imgui();
 }
 
 static void update_value(float dt, float speed, float* target, float* curr) {

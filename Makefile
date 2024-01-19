@@ -22,8 +22,8 @@ LIB_DIR=$(THIS_DIR)/lib
 PROJ_SRCS = $(shell find $(SRC_DIR) -type f -name '*.c')
 PROJ_OBJS = $(patsubst %.c,%.o,$(PROJ_SRCS))
 BIN_NAMES = \
-	scene_editor \
-	golova
+	golova \
+	scene_editor
 
 # ------------------------------------------------------------------------
 # Raylib
