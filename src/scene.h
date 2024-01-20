@@ -4,7 +4,7 @@
 #include <stddef.h>
 
 #define MAX_N_BOARD_ITEMS 64
-#define MAX_ITEM_NAME_LENGTH 128
+#define MAX_NAME_LENGTH 128
 #define MAX_RULE_LENGTH 128
 
 typedef enum GolovaState {
@@ -18,17 +18,14 @@ typedef struct Golova {
 
     struct {
         Material material;
-        Mesh mesh;
     } idle;
 
     struct {
         Material material;
-        Mesh mesh;
     } eat;
 
     struct {
         Material material;
-        Mesh mesh;
         float strength;
     } cracks;
 
@@ -45,12 +42,10 @@ typedef struct Golova {
 
     struct {
         Texture2D texture;
-        Mesh mesh;
     } eye_left;
 
     struct {
         Texture2D texture;
-        Mesh mesh;
     } eye_right;
 } Golova;
 
@@ -67,6 +62,7 @@ typedef enum ItemState {
      : (state == ITEM_HOT)    ? "ITEM_HOT" \
      : (state == ITEM_ACTIVE) ? "ITEM_ACTIVE" \
      : (state == ITEM_DYING)  ? "ITEM_DYING" \
+     : (state == ITEM_DEAD)   ? "ITEM_DEAD" \
                               : "UNKNOWN")
 
 typedef struct Item {
@@ -76,13 +72,12 @@ typedef struct Item {
     bool is_correct;
     ItemState state;
 
-    char name[MAX_ITEM_NAME_LENGTH];
+    char name[MAX_NAME_LENGTH];
 } Item;
 
 typedef struct Board {
     Transform transform;
     Material material;
-    Mesh mesh;
 
     char rule[MAX_RULE_LENGTH];
 
@@ -93,14 +88,29 @@ typedef struct Board {
     float item_elevation;
 
     Material item_material;
-    Mesh item_mesh;
     int n_items;
     Item items[MAX_N_BOARD_ITEMS];
 } Board;
 
+typedef struct Tree {
+    char name[MAX_NAME_LENGTH];
+    Transform transform;
+    Texture texture;
+} Tree;
+
+#define MAX_N_FOREST_TREES 64
+typedef struct Forest {
+    char name[MAX_NAME_LENGTH];
+    size_t n_trees;
+    Tree trees[MAX_N_FOREST_TREES];
+
+    Material trees_material;
+} Forest;
+
 typedef struct Scene {
     Golova golova;
     Board board;
+    Forest forest;
 
     Camera3D camera;
     Camera3D light_camera;
@@ -109,8 +119,8 @@ typedef struct Scene {
 extern Scene SCENE;
 
 void init_core(int screen_width, int screen_height);
-void load_scene(const char* file_path);
-void save_scene(const char* file_path);
+void load_scene(const char *file_path);
+void save_scene(const char *file_path);
 void draw_scene(bool with_shadows);
 void draw_scene_ex(
     RenderTexture2D screen, Color clear_color, Camera3D camera, bool with_shadows

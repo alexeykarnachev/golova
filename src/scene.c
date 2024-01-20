@@ -19,10 +19,11 @@ Scene SCENE;
 RenderTexture2D SHADOWMAP;
 RenderTexture2D SCREEN;
 Material MATERIAL_DEFAULT;
+Mesh PLANE_MESH;
 Shader POSTFX_SHADER;
 
-static char* load_shader_src(const char* file_path);
-static Shader load_shader(const char* vs_file_path, const char* fs_file_path);
+static char *load_shader_src(const char *file_path);
+static Shader load_shader(const char *vs_file_path, const char *fs_file_path);
 
 void init_core(int screen_width, int screen_height) {
     InitWindow(screen_width, screen_height, "Golova");
@@ -88,9 +89,13 @@ void init_core(int screen_width, int screen_height) {
     SCENE.board.item_material = LoadMaterialDefault();
     SCENE.board.item_material.shader = load_shader(0, "resources/shaders/item.frag");
     SCENE.board.item_mesh = GenMeshPlane(1.0, 1.0, 2, 2);
+
+    // Forest
+    SCENE.forest.trees_material = LoadMaterialDefault();
+    SCENE.forest.trees_material.shader = load_shader(0, "resources/shaders/sprite.frag");
 }
 
-void load_scene(const char* file_path) {
+void load_scene(const char *file_path) {
     // Golova
     SCENE.golova.transform = get_default_transform();
     SCENE.golova.eyes_idle_scale = 0.056;
@@ -120,7 +125,7 @@ void load_scene(const char* file_path) {
     // -------------------------------------------------------------------
     // Update entities from the scene save file
     if (file_path) {
-        FILE* f = fopen(file_path, "rb");
+        FILE *f = fopen(file_path, "rb");
 
         // Camera
         fread(&SCENE.camera, sizeof(Camera3D), 1, f);
@@ -146,7 +151,7 @@ void load_scene(const char* file_path) {
         fread(&SCENE.board.n_items, sizeof(int), 1, f);
 
         for (size_t i = 0; i < SCENE.board.n_items; ++i) {
-            Item* item = &SCENE.board.items[i];
+            Item *item = &SCENE.board.items[i];
             fread(&item->matrix, sizeof(Matrix), 1, f);
             fread(&item->is_correct, sizeof(bool), 1, f);
             fread(&item->name, sizeof(item->name), 1, f);
@@ -167,8 +172,8 @@ void load_scene(const char* file_path) {
     SCENE.golova.eyes_curr_uplift = SCENE.golova.eyes_idle_uplift;
 }
 
-void save_scene(const char* file_path) {
-    FILE* f = fopen(file_path, "wb");
+void save_scene(const char *file_path) {
+    FILE *f = fopen(file_path, "wb");
 
     // Camera
     fwrite(&SCENE.camera, sizeof(Camera3D), 1, f);
@@ -195,7 +200,7 @@ void save_scene(const char* file_path) {
 
     // Items
     for (size_t i = 0; i < SCENE.board.n_items; ++i) {
-        Item* item = &SCENE.board.items[i];
+        Item *item = &SCENE.board.items[i];
         fwrite(&item->matrix, sizeof(Matrix), 1, f);
         fwrite(&item->is_correct, sizeof(bool), 1, f);
         fwrite(&item->name, sizeof(item->name), 1, f);
@@ -209,7 +214,7 @@ void save_scene(const char* file_path) {
 static void draw_items(bool with_borders) {
     Shader shader = SCENE.board.item_material.shader;
     for (size_t i = 0; i < SCENE.board.n_items; ++i) {
-        Item* item = &SCENE.board.items[i];
+        Item *item = &SCENE.board.items[i];
         if (item->state == ITEM_DEAD) continue;
 
         SCENE.board.item_material.maps[0].texture = item->texture;
@@ -225,7 +230,7 @@ static void draw_items(bool with_borders) {
         SetShaderValueV(
             shader,
             GetShaderLocation(shader, "u_border_color"),
-            (void*)(&color),
+            (void *)(&color),
             SHADER_UNIFORM_VEC4,
             1
         );
@@ -327,6 +332,13 @@ void draw_scene_ex(
     MATERIAL_DEFAULT.maps[0].color = LIGHTGRAY;
     draw_mesh_m(eyes_background_mat, MATERIAL_DEFAULT, golova_mesh);
 
+    // Forest
+    for (size_t i = 0; i < SCENE.forest.n_trees; ++i) {
+        Tree *tree = &SCENE.forest.trees[i];
+        SCENE.forest.trees_material.maps[0].texture = tree->texture;
+        draw_mesh_t(tree->transform, SCENE.forest.trees_material, tree->mesh);
+    }
+
     // Items
     draw_items(true);
 
@@ -356,14 +368,14 @@ void draw_postfx(bool with_blur) {
     draw_postfx_ex(SCREEN.texture, with_blur);
 }
 
-static char* load_shader_src(const char* file_path) {
+static char *load_shader_src(const char *file_path) {
     long size;
 
-    static char* version = "#version 330";
-    char* common = read_cstr_file("resources/shaders/common.glsl", "r", &size);
+    static char *version = "#version 330";
+    char *common = read_cstr_file("resources/shaders/common.glsl", "r", &size);
 
-    char* text = read_cstr_file(file_path, "r", &size);
-    char* src = malloc(strlen(version) + strlen(common) + strlen(text) + 6);
+    char *text = read_cstr_file(file_path, "r", &size);
+    char *src = malloc(strlen(version) + strlen(common) + strlen(text) + 6);
 
     size_t p = 0;
     strcpy(&src[p], version);
@@ -382,9 +394,9 @@ static char* load_shader_src(const char* file_path) {
     return src;
 }
 
-static Shader load_shader(const char* vs_file_path, const char* fs_file_path) {
-    char* vs = NULL;
-    char* fs = NULL;
+static Shader load_shader(const char *vs_file_path, const char *fs_file_path) {
+    char *vs = NULL;
+    char *fs = NULL;
 
     if (vs_file_path) vs = load_shader_src(vs_file_path);
     if (fs_file_path) fs = load_shader_src(fs_file_path);

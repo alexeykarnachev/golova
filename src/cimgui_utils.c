@@ -17,7 +17,7 @@ ImGuiWindowFlags GHOST_WINDOW_FLAGS
 
 void load_imgui(void) {
     igCreateContext(NULL);
-    GLFWwindow* window = (GLFWwindow*)GetWindowHandle();
+    GLFWwindow *window = (GLFWwindow *)GetWindowHandle();
     glfwGetWindowUserPointer(window);
     ImGui_ImplGlfw_InitForOpenGL(window, true);
     ImGui_ImplOpenGL3_Init("#version 330");
@@ -42,14 +42,14 @@ void ig_fix_window_top_left(void) {
 }
 
 void ig_fix_window_bot_left(void) {
-    ImGuiIO* io = igGetIO();
+    ImGuiIO *io = igGetIO();
     ImVec2 position = {0, io->DisplaySize.y};
     ImVec2 pivot = {0, 1};
     igSetNextWindowPos(position, ImGuiCond_Always, pivot);
     igSetNextWindowSize((ImVec2){0.0, 0.0}, ImGuiCond_Always);
 }
 
-bool ig_collapsing_header(const char* name, bool is_opened) {
+bool ig_collapsing_header(const char *name, bool is_opened) {
     int flags = is_opened ? ImGuiTreeNodeFlags_DefaultOpen : 0;
     return igCollapsingHeader_TreeNodeFlags(name, flags);
 }

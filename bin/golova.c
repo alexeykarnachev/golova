@@ -60,9 +60,9 @@ typedef struct Position {
 
 static float GAME_STATE_TO_TIME[] = {2.0, 1.0, 0.0};
 
-static char* SCENES_DIR = "resources/scenes";
+static char *SCENES_DIR = "resources/scenes";
 static int CURR_SCENE_ID;
-static char** SCENE_FILE_NAMES;
+static char **SCENE_FILE_NAMES;
 static int N_SCENES;
 
 static PauseState PAUSE_STATE;
@@ -82,7 +82,7 @@ static bool IS_LMB_PRESSED;
 static bool IS_ALTF4_PRESSED;
 static Ray MOUSE_RAY;
 
-static Item* PICKED_ITEM;
+static Item *PICKED_ITEM;
 
 static float EYES_TARGET_SHIFT;
 static float EYES_TARGET_UPLIFT;
@@ -92,13 +92,13 @@ static void update_game(void);
 static void draw_ggui(void);
 static void draw_imgui(void);
 
-static bool ggui_button(Position pos, const char* text, int font_size);
+static bool ggui_button(Position pos, const char *text, int font_size);
 static Rectangle ggui_get_rec(Position pos, int width, int height);
-static void ggui_text(Position pos, const char* text, int font_size, Color color);
+static void ggui_text(Position pos, const char *text, int font_size, Color color);
 
-static void update_value(float dt, float speed, float* target, float* curr);
+static void update_value(float dt, float speed, float *target, float *curr);
 static void update_value2(
-    float dt, float speed, float target_x, float target_y, float* curr_x, float* curr_y
+    float dt, float speed, float target_x, float target_y, float *curr_x, float *curr_y
 );
 
 int main(void) {
@@ -169,16 +169,16 @@ static void update_game(void) {
 
     // -------------------------------------------------------------------
     // Update board items
-    Board* b = &SCENE.board;
+    Board *b = &SCENE.board;
     Transform t = b->transform;
     t.scale = Vector3Scale(Vector3One(), t.scale.x);
     Matrix board_matrix = get_transform_matrix(t);
-    float* board_matrix_f = MatrixToFloat(board_matrix);
+    float *board_matrix_f = MatrixToFloat(board_matrix);
 
     int n_rows = sqrt(b->n_items);
     int n_cols = ceil((float)b->n_items / n_rows);
     for (size_t i = 0; i < b->n_items; ++i) {
-        Item* item = &b->items[i];
+        Item *item = &b->items[i];
 
         int i_row = i / n_cols;
         int i_col = i % n_cols;
@@ -216,7 +216,7 @@ static void update_game(void) {
 
     // Look at hot, active or dying item
     for (size_t i = 0; i < SCENE.board.n_items; ++i) {
-        Item* item = &SCENE.board.items[i];
+        Item *item = &SCENE.board.items[i];
         if (item->state > ITEM_COLD && item->state < ITEM_DEAD) {
             Matrix mat = MatrixMultiply(
                 get_transform_matrix(SCENE.board.transform), item->matrix
@@ -271,7 +271,7 @@ static void update_game(void) {
         // Handle mouse input and update item states
         bool is_hit_any = false;
         for (size_t i = 0; i < SCENE.board.n_items; ++i) {
-            Item* item = &SCENE.board.items[i];
+            Item *item = &SCENE.board.items[i];
 
             // Don't update dead items
             if (item->state == ITEM_DEAD) continue;
@@ -318,7 +318,7 @@ static void update_game(void) {
             NEXT_GAME_STATE = GOLOVA_IS_EATING;
             if (!PICKED_ITEM) {
                 for (size_t i = 0; i < SCENE.board.n_items; ++i) {
-                    Item* item = &SCENE.board.items[i];
+                    Item *item = &SCENE.board.items[i];
                     if (!(item->state == ITEM_DEAD) && !item->is_correct) {
                         PICKED_ITEM = item;
                     }
@@ -333,7 +333,7 @@ static void update_game(void) {
 
         // Cool down all non-dying items when golova is eating
         for (size_t i = 0; i < SCENE.board.n_items; ++i) {
-            Item* item = &SCENE.board.items[i];
+            Item *item = &SCENE.board.items[i];
             if (item->state < ITEM_DYING) item->state = ITEM_COLD;
         }
 
@@ -369,9 +369,9 @@ static void draw_ggui(void) {
         int gap = 20;
         int pad = 50;
 
-        const char* resume_text = "Resume";
-        const char* options_text = "Options";
-        const char* quit_text = "Quit";
+        const char *resume_text = "Resume";
+        const char *options_text = "Options";
+        const char *quit_text = "Quit";
 
         int width = MeasureText(options_text, font_size) * 1.2;
         int height = font_size * 3 + gap * 2 + pad * 2;
@@ -394,7 +394,7 @@ static void draw_ggui(void) {
         IS_EXIT_GAME = ggui_button((Position){cx, y, CENTER_TOP}, quit_text, font_size);
     } else if (GAME_STATE == SCENE_OVER || GAME_STATE == GAME_OVER) {
 
-        const char* text;
+        const char *text;
         Color color;
         Position pos;
 
@@ -441,7 +441,7 @@ static Rectangle ggui_get_rec(Position pos, int width, int height) {
     return rec;
 }
 
-static bool ggui_button(Position pos, const char* text, int font_size) {
+static bool ggui_button(Position pos, const char *text, int font_size) {
     int width = MeasureText(text, font_size);
     Rectangle rec = ggui_get_rec(pos, width, font_size);
 
@@ -452,7 +452,7 @@ static bool ggui_button(Position pos, const char* text, int font_size) {
     return is_hit && IS_LMB_PRESSED;
 }
 
-static void ggui_text(Position pos, const char* text, int font_size, Color color) {
+static void ggui_text(Position pos, const char *text, int font_size, Color color) {
     int width = MeasureText(text, font_size);
     Rectangle rec = ggui_get_rec(pos, width, font_size);
     DrawText(text, rec.x, rec.y, font_size, color);
@@ -471,8 +471,8 @@ static void draw_imgui(void) {
         igText("n_hits_required: %d", SCENE.board.n_hits_required);
         igText("n_misses_allowed: %d", SCENE.board.n_misses_allowed);
 
-        const char* picked_item_name = "";
-        const char* picked_item_state = "";
+        const char *picked_item_name = "";
+        const char *picked_item_state = "";
         if (PICKED_ITEM) {
             picked_item_name = PICKED_ITEM->name;
             picked_item_state = ITEM_STATE_TO_NAME(PICKED_ITEM->state);
@@ -484,7 +484,7 @@ static void draw_imgui(void) {
     end_imgui();
 }
 
-static void update_value(float dt, float speed, float* target, float* curr) {
+static void update_value(float dt, float speed, float *target, float *curr) {
     float todo = *target - *curr;
     float step = speed * dt;
     if (step > fabs(todo)) *curr = *target;
@@ -493,7 +493,7 @@ static void update_value(float dt, float speed, float* target, float* curr) {
 }
 
 static void update_value2(
-    float dt, float speed, float target_x, float target_y, float* curr_x, float* curr_y
+    float dt, float speed, float target_x, float target_y, float *curr_x, float *curr_y
 ) {
     Vector2 d = {target_x - *curr_x, target_y - *curr_y};
     float len = Vector2Length(d);

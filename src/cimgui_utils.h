@@ -10,4 +10,4 @@ void end_imgui(void);
 
 void ig_fix_window_top_left(void);
 void ig_fix_window_bot_left(void);
-bool ig_collapsing_header(const char* name, bool is_opened);
+bool ig_collapsing_header(const char *name, bool is_opened);

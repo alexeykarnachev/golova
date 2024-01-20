@@ -9,9 +9,9 @@
 
 #define MAX_FILE_NAMES 1024
 
-char* read_cstr_file(const char* restrict file_path, const char* mode, long* n_bytes) {
-    FILE* file = NULL;
-    char* content = NULL;
+char *read_cstr_file(const char *restrict file_path, const char *mode, long *n_bytes) {
+    FILE *file = NULL;
+    char *content = NULL;
 
     file = fopen(file_path, mode);
     if (file == NULL) goto fail;
@@ -50,17 +50,17 @@ fail:
     return NULL;
 }
 
-char** get_file_names_in_dir(const char* path, int* n_file_names) {
-    DIR* dir = opendir(path);
+char **get_file_names_in_dir(const char *path, int *n_file_names) {
+    DIR *dir = opendir(path);
     if (dir == NULL) {
         TraceLog(LOG_ERROR, "Failed to open directory %s", path);
         exit(1);
     }
 
-    char** file_names = (char**)malloc(MAX_FILE_NAMES * sizeof(char*));
+    char **file_names = (char **)malloc(MAX_FILE_NAMES * sizeof(char *));
 
     int i = 0;
-    struct dirent* entry;
+    struct dirent *entry;
     while ((entry = readdir(dir)) != NULL) {
         if (entry->d_type == DT_REG) {
             file_names[i] = strdup(entry->d_name);
@@ -73,10 +73,10 @@ char** get_file_names_in_dir(const char* path, int* n_file_names) {
     return file_names;
 }
 
-void get_file_name(char* dst, const char* path, bool strip_ext) {
+void get_file_name(char *dst, const char *path, bool strip_ext) {
     // Find the last occurrence of the path separator ('/' or '\') to locate the
     // start of the file name
-    const char* file_name_start = strrchr(path, '/');
+    const char *file_name_start = strrchr(path, '/');
     if (file_name_start == NULL) {
         file_name_start = strrchr(path, '\\');
     }
@@ -91,7 +91,7 @@ void get_file_name(char* dst, const char* path, bool strip_ext) {
 
     // Find the last occurrence of the dot('.') to locate the start of the file
     // extension
-    const char* file_extension_start = strrchr(file_name_start, '.');
+    const char *file_extension_start = strrchr(file_name_start, '.');
 
     // Calculate the length of the file name (excluding extension if needed)
     size_t file_name_length = (file_extension_start && strip_ext)

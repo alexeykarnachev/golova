@@ -20,7 +20,7 @@
 // #define SCREEN_HEIGHT 768
 #define SCREEN_WIDTH 2560
 #define SCREEN_HEIGHT 1440
-#define MAX_N_COLLISION_INFOS 64
+#define MAX_N_COLLISION_INFOS 256
 
 typedef enum EntityType {
     NULL_TYPE = 0,
@@ -28,23 +28,26 @@ typedef enum EntityType {
     GOLOVA_TYPE,
     BOARD_TYPE,
     ITEM_TYPE,
+    TREE_TYPE,
 } EntityType;
 
 typedef struct CollisionInfo {
     RayCollision collision;
     Matrix matrix;
     Mesh mesh;
-    Transform* transform;
+    Transform *transform;
     EntityType entity_type;
-    void* entity;
+    void *entity;
 } CollisionInfo;
 
 typedef struct CameraShell {
     Transform transform;
     Material material;
     Mesh mesh;
-    Camera3D* camera;
+    Camera3D *camera;
 } CameraShell;
+
+static nfdfilteritem_t NFD_TEXTURE_FILTER[1] = {{"Texture", "png"}};
 
 static RenderTexture2D FULL_SCREEN;
 static RenderTexture2D PREVIEW_SCREEN;
@@ -57,7 +60,7 @@ static CameraShell LIGHT_CAMERA_SHELL;
 static char SCENE_FILE_PATH[2048];
 
 static size_t N_COLLISION_INFOS;
-static CollisionInfo* PICKED_COLLISION_INFO;
+static CollisionInfo *PICKED_COLLISION_INFO;
 static CollisionInfo COLLISION_INFOS[MAX_N_COLLISION_INFOS];
 
 static bool IS_MMB_DOWN;
@@ -73,8 +76,8 @@ static bool IS_IG_INTERACTED;
 static bool WITH_SHADOWS = true;
 static bool WITH_BLUR = false;
 
-static Transform* get_picked_transform(void);
-static void* get_picked_entity(void);
+static Transform *get_picked_transform(void);
+static void *get_picked_entity(void);
 static EntityType get_picked_entity_type(void);
 
 static void reset_camera_shells();
@@ -91,6 +94,8 @@ static void draw_editor_grid(void);
 static void draw_camera_shells(void);
 static void draw_item_boxes(void);
 static void draw_imgui(void);
+
+static void load_sprite(const char* search_path, char* dst_name, Texture2D *dst_texture);
 
 int main(void) {
     init_core(SCREEN_WIDTH, SCREEN_HEIGHT);
@@ -176,12 +181,12 @@ int main(void) {
     return 0;
 }
 
-static Transform* get_picked_transform(void) {
+static Transform *get_picked_transform(void) {
     if (!PICKED_COLLISION_INFO) return NULL;
     return PICKED_COLLISION_INFO->transform;
 }
 
-static void* get_picked_entity(void) {
+static void *get_picked_entity(void) {
     if (!PICKED_COLLISION_INFO) return NULL;
     return PICKED_COLLISION_INFO->entity;
 }
@@ -192,9 +197,9 @@ static EntityType get_picked_entity_type(void) {
 }
 
 static void reset_camera_shells(void) {
-    CameraShell* shells[2] = {&CAMERA_SHELL, &LIGHT_CAMERA_SHELL};
+    CameraShell *shells[2] = {&CAMERA_SHELL, &LIGHT_CAMERA_SHELL};
     for (size_t i = 0; i < 2; ++i) {
-        CameraShell* shell = shells[i];
+        CameraShell *shell = shells[i];
         shell->transform = get_default_transform();
         shell->transform.translation = shell->camera->position;
         Vector3 dir = Vector3Subtract(shell->camera->target, shell->camera->position);
@@ -211,7 +216,7 @@ static void update_scene_save_load(void) {
 
     if (is_save_pressed) {
         if (SCENE_FILE_PATH[0] == '\0' || IsKeyDown(KEY_LEFT_SHIFT)) {
-            char* fp = save_nfd("resources/scenes", filter, 1);
+            char *fp = save_nfd("resources/scenes", filter, 1);
             if (fp != NULL) {
                 strcpy(SCENE_FILE_PATH, fp);
                 NFD_FreePathN(fp);
@@ -220,7 +225,7 @@ static void update_scene_save_load(void) {
 
         if (SCENE_FILE_PATH[0] != '\0') save_scene(SCENE_FILE_PATH);
     } else if (is_load_pressed) {
-        char* fp = open_nfd("resources/scenes", filter, 1);
+        char *fp = open_nfd("resources/scenes", filter, 1);
         if (fp != NULL) {
             load_scene(fp);
             reset_camera_shells();
@@ -249,13 +254,22 @@ static void update_collision_infos(void) {
     COLLISION_INFOS[N_COLLISION_INFOS++].mesh = LIGHT_CAMERA_SHELL.mesh;
 
     for (size_t i = 0; i < SCENE.board.n_items; ++i) {
-        Item* item = &SCENE.board.items[i];
+        Item *item = &SCENE.board.items[i];
 
         COLLISION_INFOS[N_COLLISION_INFOS].entity_type = ITEM_TYPE;
         COLLISION_INFOS[N_COLLISION_INFOS].transform = NULL;
         COLLISION_INFOS[N_COLLISION_INFOS].matrix = item->matrix;
         COLLISION_INFOS[N_COLLISION_INFOS].entity = item;
         COLLISION_INFOS[N_COLLISION_INFOS++].mesh = SCENE.board.item_mesh;
+    }
+
+    for (size_t i = 0; i < SCENE.forest.n_trees; ++i) {
+        Tree *tree = &SCENE.forest.trees[i];
+
+        COLLISION_INFOS[N_COLLISION_INFOS].entity_type = TREE_TYPE;
+        COLLISION_INFOS[N_COLLISION_INFOS].transform = &tree->transform;
+        COLLISION_INFOS[N_COLLISION_INFOS].entity = tree;
+        COLLISION_INFOS[N_COLLISION_INFOS++].mesh = tree->mesh;
     }
 }
 
@@ -269,7 +283,7 @@ static void update_input(void) {
 }
 
 static void update_board_items(void) {
-    Board* b = &SCENE.board;
+    Board *b = &SCENE.board;
     Transform t = b->transform;
     t.scale = Vector3Scale(Vector3One(), t.scale.x);
 
@@ -279,7 +293,7 @@ static void update_board_items(void) {
     int n_rows = sqrt(n_items);
     int n_cols = ceil((float)n_items / n_rows);
     for (size_t i = 0; i < n_items; ++i) {
-        Item* item = &b->items[i];
+        Item *item = &b->items[i];
 
         int i_row = i / n_cols;
         int i_col = i % n_cols;
@@ -302,7 +316,7 @@ static void update_board_items(void) {
 }
 
 static void update_gizmo(void) {
-    Transform* t = get_picked_transform();
+    Transform *t = get_picked_transform();
     if (!t) return;
 
     rgizmo_update(&GIZMO, CAMERA, t->translation);
@@ -346,7 +360,7 @@ static void update_picking(void) {
     Ray ray = GetMouseRay(MOUSE_POSITION, CAMERA);
 
     for (size_t id = 0; id < N_COLLISION_INFOS; ++id) {
-        CollisionInfo* info = &COLLISION_INFOS[id];
+        CollisionInfo *info = &COLLISION_INFOS[id];
 
         Matrix matrix;
         matrix = info->transform ? get_transform_matrix(*info->transform) : info->matrix;
@@ -366,9 +380,9 @@ static void update_picking(void) {
 }
 
 static void update_camera_shells(void) {
-    CameraShell* shells[2] = {&CAMERA_SHELL, &LIGHT_CAMERA_SHELL};
+    CameraShell *shells[2] = {&CAMERA_SHELL, &LIGHT_CAMERA_SHELL};
     for (size_t i = 0; i < 2; ++i) {
-        CameraShell* shell = shells[i];
+        CameraShell *shell = shells[i];
         shell->camera->position = shell->transform.translation;
         Vector3 dir = Vector3RotateByQuaternion(
             (Vector3){0.0, 0.0, -1.0}, shell->transform.rotation
@@ -378,17 +392,17 @@ static void update_camera_shells(void) {
 }
 
 static void set_board_values(int n_items, int n_hits_required, int n_misses_allowed) {
-    Board* b = &SCENE.board;
+    Board *b = &SCENE.board;
 
     if (n_items < 0 || n_items > MAX_N_BOARD_ITEMS) return;
     while (n_items < b->n_items) {
         b->n_items -= 1;
-        Item* item = &b->items[b->n_items];
+        Item *item = &b->items[b->n_items];
         UnloadTexture(item->texture);
         *item = (Item){0};
     }
     while (n_items > b->n_items) {
-        Item* item = &b->items[b->n_items];
+        Item *item = &b->items[b->n_items];
         b->n_items += 1;
     }
 
@@ -409,9 +423,9 @@ static void draw_editor_grid(void) {
 }
 
 static void draw_camera_shells(void) {
-    CameraShell* shells[2] = {&CAMERA_SHELL, &LIGHT_CAMERA_SHELL};
+    CameraShell *shells[2] = {&CAMERA_SHELL, &LIGHT_CAMERA_SHELL};
     for (size_t i = 0; i < 2; ++i) {
-        CameraShell* shell = shells[i];
+        CameraShell *shell = shells[i];
         draw_mesh_t(shell->transform, shell->material, shell->mesh);
 
         Vector3 start = shell->camera->position;
@@ -425,7 +439,7 @@ static void draw_camera_shells(void) {
 static void draw_item_boxes(void) {
     BoundingBox box = GetMeshBoundingBox(SCENE.board.item_mesh);
     for (size_t i = 0; i < SCENE.board.n_items; ++i) {
-        Item* item = &SCENE.board.items[i];
+        Item *item = &SCENE.board.items[i];
         Color color = item->is_correct ? GREEN : RED;
         rlPushMatrix();
         rlMultMatrixf(MatrixToFloat(item->matrix));
@@ -438,7 +452,7 @@ static void draw_imgui(void) {
     begin_imgui();
 
     IG_ID = 1;
-    ImGuiIO* io = igGetIO();
+    ImGuiIO *io = igGetIO();
     IS_IG_INTERACTED = io->WantCaptureMouse || io->WantCaptureKeyboard;
 
     ig_fix_window_top_left();
@@ -464,7 +478,7 @@ static void draw_imgui(void) {
         }
 
         if (ig_collapsing_header("Golova", true)) {
-            Golova* g = &SCENE.golova;
+            Golova *g = &SCENE.golova;
             igSeparatorText("Eyes");
             igDragFloat(
                 "Uplift##eyes", &g->eyes_idle_uplift, 0.001, -0.02, 0.08, "%.3f", 0
@@ -475,7 +489,7 @@ static void draw_imgui(void) {
         }
 
         if (ig_collapsing_header("Board", true)) {
-            Board* b = &SCENE.board;
+            Board *b = &SCENE.board;
             igInputText("Rule", b->rule, MAX_RULE_LENGTH, 0, 0, NULL);
             igDragFloat("Board scale", &b->board_scale, 0.01, 0.01, 1.0, "%.3f", 0);
             igDragFloat("Item Scale", &b->item_scale, 0.01, 0.01, 1.0, "%.3f", 0);
@@ -492,8 +506,76 @@ static void draw_imgui(void) {
             set_board_values(n_items, n_hits_required, n_misses_allowed);
         }
 
+        if (ig_collapsing_header("Forest", true)) {
+            Forest *f = &SCENE.forest;
+            igText("N trees: %d", f->n_trees);
+            if (f->n_trees < MAX_N_FOREST_TREES && igButton("New tree", (ImVec2){0.0, 0.0})) {
+                Tree *tree = &f->trees[f->n_trees++];
+                load_sprite("resources/trees/sprites", tree->name, &tree->transform, &tree->texture, &tree->mesh);
+            }
+
+            igSeparatorText("Trees");
+            for (size_t i = 0; i < f->n_trees; ++i) {
+                igPushID_Int(IG_ID++);
+
+                Tree *tree = &f->trees[i];
+                igText(tree->name);
+
+                Texture2D texture = tree->texture;
+                int texture_id = texture.id;
+                
+                bool is_clicked = igImageButton(
+                    "Texture",
+                    (ImTextureID)(long)texture_id,
+                    (ImVec2){64.0, 64.0},
+                    (ImVec2){0.0, 0.0},
+                    (ImVec2){1.0, 1.0},
+                    (ImVec4){1.0, 1.0, 1.0, 1.0},
+                    (ImVec4){1.0, 1.0, 1.0, 1.0}
+                );
+
+                if (is_clicked) load_sprite("resources/trees/sprites", tree->name, &tree->transform, &tree->texture, &tree->mesh);
+                igSameLine(0, 0);
+
+                igBeginGroup();
+                if (igButton("Pick", (ImVec2){0.0, 0.0})) {
+                    for (size_t i = 0; i < N_COLLISION_INFOS; ++i) {
+                        CollisionInfo *info = &COLLISION_INFOS[i];
+                        if (info->entity == tree) PICKED_COLLISION_INFO = info;
+                    }
+                }
+
+
+                if (igButton("Remove", (ImVec2){0.0, 0.0})) {
+                    size_t pop_idx;
+                    for (size_t i = 0; i < SCENE.forest.n_trees; ++i) {
+                        if (&SCENE.forest.trees[i] == tree) {
+                            UnloadMesh(tree->mesh);
+                            // UnloadTexture(tree->texture);
+                            pop_idx = i;
+                            SCENE.forest.n_trees -= 1;
+                            if (PICKED_COLLISION_INFO && PICKED_COLLISION_INFO->entity == tree) {
+                                PICKED_COLLISION_INFO = NULL;
+                            }
+                            break;
+                        };
+                    }
+
+                    // size_t n_move = SCENE.forest.n_trees - pop_idx;
+                    // if (n_move > 0) {
+                    //     size_t size_move = n_move * sizeof(SCENE.forest.trees[0]);
+                    //     memmove(&SCENE.forest.trees[pop_idx], &SCENE.forest.trees[pop_idx + 1], size_move);
+                    // }
+                }
+                igEndGroup();
+
+                igPopID();
+            }
+
+        }
+
         if (ig_collapsing_header("Item", true) && get_picked_entity_type() == ITEM_TYPE) {
-            Item* item = get_picked_entity();
+            Item *item = get_picked_entity();
             Texture2D texture = item->texture;
             int texture_id = texture.id;
 
@@ -507,18 +589,7 @@ static void draw_imgui(void) {
                 (ImVec4){1.0, 1.0, 1.0, 1.0}
             );
 
-            if (is_clicked) {
-                static nfdfilteritem_t filter[1] = {{"Texture", "png"}};
-                char* fp = open_nfd("resources/items/sprites", filter, 1);
-                if (fp != NULL) {
-                    get_file_name(item->name, fp, true);
-                    if (IsTextureReady(item->texture)) {
-                        UnloadTexture(item->texture);
-                    }
-                    item->texture = LoadTexture(fp);
-                    NFD_FreePathN(fp);
-                }
-            }
+            if (is_clicked) load_sprite("resources/items/sprites", item->name, 0, &item->texture, 0);
 
             igSameLine(0.0, 5.0);
             igBeginGroup();
@@ -528,14 +599,14 @@ static void draw_imgui(void) {
         }
 
         if (ig_collapsing_header("Transform", true) && get_picked_transform()) {
-            Transform* t = get_picked_transform();
-            igDragFloat3("Scale", (float*)&t->scale, 0.1, 0.1, 100.0, "%.1f", 0);
+            Transform *t = get_picked_transform();
+            igDragFloat3("Scale", (float *)&t->scale, 0.1, 0.1, 100.0, "%.1f", 0);
             igDragFloat3(
-                "Translation", (float*)&t->translation, 0.1, -100.0, 100.0, "%.2f", 0
+                "Translation", (float *)&t->translation, 0.1, -100.0, 100.0, "%.2f", 0
             );
 
             Vector3 e = Vector3Scale(QuaternionToEuler(t->rotation), RAD2DEG);
-            igDragFloat3("Rotation", (float*)&e, 5.0, -180.0, 180.0, "%.2f", 0);
+            igDragFloat3("Rotation", (float *)&e, 5.0, -180.0, 180.0, "%.2f", 0);
             e = Vector3Scale(e, DEG2RAD);
             t->rotation = QuaternionFromEuler(e.x, e.y, e.z);
         }
@@ -549,4 +620,18 @@ static void draw_imgui(void) {
     igEnd();
 
     end_imgui();
+}
+
+static void load_sprite(const char* search_path, char* dst_name, Texture2D *dst_texture) {
+    char *fp = open_nfd(search_path, NFD_TEXTURE_FILTER, 1);
+    if (fp != NULL) {
+        get_file_name(dst_name, fp, true);
+        bool is_reset_mesh = false;
+        if (IsTextureReady(*dst_texture)) {
+            UnloadTexture(*dst_texture);
+            is_reset_mesh = true;
+        }
+        *dst_texture = LoadTexture(fp);
+        NFD_FreePathN(fp);
+    }
 }
