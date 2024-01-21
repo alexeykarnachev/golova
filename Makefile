@@ -1,29 +1,69 @@
 .PHONY: all clean
 
-CC=gcc
-CFLAGS=-Wall -std=gnu99 -Wno-missing-braces -Wunused-result -I./include
-LDFLAGS=\
-	-L./lib -lraylib -lm -lpthread -ldl -lGL -lstdc++ \
-	-lcimgui -lnfd \
-	$(shell pkg-config --libs gtk+-3.0)
 
-ifeq ($(DEBUG),true)
-	CFLAGS += -fsanitize=address -g
-	LDFLAGS += -fsanitize=address -g
-endif
+PLATFORM ?= PLATFORM_DESKTOP
+BUILD_MODE ?= RELEASE
 
-THIS_DIR=$(shell pwd)
-BIN_DIR=$(THIS_DIR)/bin
-SRC_DIR=$(THIS_DIR)/src
-DEPS_DIR=$(THIS_DIR)/deps
-INCLUDE_DIR=$(THIS_DIR)/include
-LIB_DIR=$(THIS_DIR)/lib
+THIS_DIR = $(shell pwd)
+BIN_DIR = $(THIS_DIR)/bin
+SRC_DIR = $(THIS_DIR)/src
+DEPS_DIR = $(THIS_DIR)/deps
+INCLUDE_DIR = $(THIS_DIR)/include
+BUILD_DIR = $(THIS_DIR)/build/$(PLATFORM)
+LIB_DIR = $(THIS_DIR)/lib/$(PLATFORM)
 
 PROJ_SRCS = $(shell find $(SRC_DIR) -type f -name '*.c')
 PROJ_OBJS = $(patsubst %.c,%.o,$(PROJ_SRCS))
-BIN_NAMES = \
-	golova \
-	scene_editor
+BIN_NAMES = golova
+ifeq ($(PLATFORM),PLATFORM_DESKTOP)
+	BIN_NAMES += scene_editor
+endif
+
+# ------------------------------------------------------------------------
+# Define compiler: CC
+CC = gcc
+ifeq ($(PLATFORM),PLATFORM_WEB)
+	CC = emcc
+endif
+
+# ------------------------------------------------------------------------
+# Define compiler flags: CFLAGS
+CFLAGS = -Wall -std=c99 -D_DEFAULT_SOURCE -Wno-missing-braces
+
+ifeq ($(BUILD_MODE),DEBUG)
+    CFLAGS += -g -D_DEBUG
+    ifeq ($(PLATFORM),PLATFORM_WEB)
+        CFLAGS += -s ASSERTIONS=1 --profiling
+    endif
+else
+    ifeq ($(PLATFORM),PLATFORM_WEB)
+		CFLAGS += -Os
+    else
+        CFLAGS += -s -O2
+    endif
+endif
+
+# ------------------------------------------------------------------------
+# Define library paths containing required libs: LDFLAGS
+LDFLAGS = -L$(LIB_DIR)
+
+ifeq ($(PLATFORM),PLATFORM_WEB)
+	LDFLAGS += \
+		-s USE_GLFW=3 -s USE_GLFW=3 -s ASYNCIFY -s EXPORTED_RUNTIME_METHODS=ccall \
+		--shell-file $(RAYLIB_SRC_DIR)/minshell.html
+	EXT = .html
+endif
+
+ifeq ($(PLATFORM),PLATFORM_DESKTOP)
+	LDFLAGS += -lraylib -lcimgui -lnfd \
+		$(shell pkg-config --libs gtk+-3.0)
+endif
+
+LDFLAGS += -lm -lpthread -ldl -lGL -lstdc++
+
+# ------------------------------------------------------------------------
+# Define include paths for required headers: INCLUDE_PATHS
+INCLUDE_PATHS = -I$(INCLUDE_DIR)
 
 # ------------------------------------------------------------------------
 # Raylib
@@ -33,7 +73,6 @@ RAYLIB_NAME=raylib-$(RAYLIB_VERSION)
 RAYLIB_DIR=$(DEPS_DIR)/$(RAYLIB_NAME)
 RAYLIB_ARCHIVE_PATH=$(DEPS_DIR)/$(RAYLIB_NAME).tar.gz
 RAYLIB_SRC_DIR=$(RAYLIB_DIR)/src
-RAYLIB_PLATFORM=PLATFORM_DESKTOP
 
 # ------------------------------------------------------------------------
 # Raygizmo
@@ -62,19 +101,20 @@ NFD_SRC_DIR=$(NFD_DIR)/src
 # Project
 all: \
 	$(BIN_NAMES)
+	cp -r ./resources $(BUILD_DIR);
 	rm -f $(PROJ_OBJS);
 	rm -f $(BIN_DIR)/*.o;
 
 $(BIN_NAMES): %: $(BIN_DIR)/%.o $(PROJ_OBJS); \
-	$(CC) -o $(BIN_DIR)/$@ $^ -Wl,-rpath=$(THIS_DIR)/lib $(LDFLAGS)
+	$(CC) -o $(BUILD_DIR)/$@$(EXT) $^ -Wl,-rpath=$(LIB_DIR) $(LDFLAGS)
 
 %.o: %.c; \
-	$(CC) $(CFLAGS) -c -o $@ $<
+	$(CC) $(CFLAGS) $(INCLUDE_PATHS) -c -o $@ $<
 
 # ------------------------------------------------------------------------
 # Dependencies
 create_dirs:
-	mkdir -p $(DEPS_DIR) $(INCLUDE_DIR) $(LIB_DIR);
+	mkdir -p $(DEPS_DIR) $(INCLUDE_DIR) $(LIB_DIR) $(BUILD_DIR);
 
 download_raylib:
 	if [ ! -d $(RAYLIB_DIR) ]; then \
@@ -101,7 +141,7 @@ download_nfd:
 
 install_raylib:
 	cd $(RAYLIB_SRC_DIR) \
-	&& make PLATFORM=$(RAYLIB_PLATFORM) \
+	&& make PLATFORM=$(PLATFORM) \
 	&& sudo make install \
 		RAYLIB_INSTALL_PATH=$(LIB_DIR) \
 		RAYLIB_H_INSTALL_PATH=$(INCLUDE_DIR) \

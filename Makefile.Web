@@ -1,0 +1,60 @@
+.PHONY: all clean
+
+THIS_DIR=$(shell pwd)
+BIN_DIR=$(THIS_DIR)/bin
+SRC_DIR=$(THIS_DIR)/src
+DEPS_DIR=$(THIS_DIR)/deps
+INCLUDE_DIR=$(THIS_DIR)/include
+LIB_DIR=$(THIS_DIR)/lib
+
+PROJ_SRCS = $(shell find $(SRC_DIR) -type f -name '*.c')
+PROJ_OBJS = $(patsubst %.c,%.o,$(PROJ_SRCS))
+BIN_NAMES = golova
+
+# ------------------------------------------------------------------------
+# Raylib
+RAYLIB_VERSION=5.0
+RAYLIB_URL=https://github.com/raysan5/raylib/archive/refs/tags/$(RAYLIB_VERSION).tar.gz
+RAYLIB_NAME=raylib-$(RAYLIB_VERSION)
+RAYLIB_DIR=$(DEPS_DIR)/$(RAYLIB_NAME)
+RAYLIB_ARCHIVE_PATH=$(DEPS_DIR)/$(RAYLIB_NAME).tar.gz
+RAYLIB_SRC_DIR=$(RAYLIB_DIR)/src
+RAYLIB_PLATFORM=PLATFORM_WEB
+
+# ------------------------------------------------------------------------
+# Project
+CC=emcc
+CFLAGS=-Wall -Wno-missing-braces -Wunused-result -I./include -std=c99 -D_DEFAULT_SOURCE
+LDFLAGS=-L. -L./lib -L$(RAYLIB_PATH)/src -s USE_GLFW=3 -s ASYNCIFY -s EXPORTED_RUNTIME_METHODS=ccall --shell-file $(RAYLIB_SRC_DIR)/minshell.html ./lib/libraylib.a
+EXT=.html
+
+bin/golova: bin/golova.c
+	$(CC) -o $@$(EXT) $< $(CFLAGS) $(LDFLAGS) -D$(RAYLIB_PLATFORM) $(PROJ_SRCS) \
+	-s TOTAL_MEMORY=67108864 \
+	--preload-file resources
+
+# ------------------------------------------------------------------------
+# Dependencies
+create_dirs:
+	mkdir -p $(DEPS_DIR) $(INCLUDE_DIR) $(LIB_DIR);
+
+download_raylib:
+	if [ ! -d $(RAYLIB_DIR) ]; then \
+		wget $(RAYLIB_URL) -O $(RAYLIB_ARCHIVE_PATH); \
+		tar zxvf $(RAYLIB_ARCHIVE_PATH) -C $(DEPS_DIR); \
+	fi
+
+install_raylib:
+	cd $(RAYLIB_SRC_DIR) \
+	&& make PLATFORM=$(RAYLIB_PLATFORM) \
+	&& sudo make install \
+		RAYLIB_INSTALL_PATH=$(LIB_DIR) \
+		RAYLIB_H_INSTALL_PATH=$(INCLUDE_DIR) \
+	&& cp --update $(RAYLIB_SRC_DIR)/rcamera.h $(INCLUDE_DIR);
+
+deps: \
+	create_dirs \
+	download_raylib \
+	install_raylib
+	rm -f $(DEPS_DIR)/*.tar.gz;
+

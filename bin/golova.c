@@ -1,4 +1,3 @@
-#include "../src/cimgui_utils.h"
 #include "../src/math.h"
 #include "../src/scene.h"
 #include "../src/utils.h"
@@ -8,13 +7,18 @@
 #include <math.h>
 #include <stdio.h>
 
-#define CIMGUI_DEFINE_ENUMS_AND_STRUCTS
-#include "cimgui.h"
+#if defined(PLATFORM_WEB)
+    #include <emscripten/emscripten.h>
+#endif
 
-// #define SCREEN_WIDTH 1024
-// #define SCREEN_HEIGHT 768
-#define SCREEN_WIDTH 2560
-#define SCREEN_HEIGHT 1440
+// #include "../src/cimgui_utils.h"
+// #define CIMGUI_DEFINE_ENUMS_AND_STRUCTS
+// #include "cimgui.h"
+
+#define SCREEN_WIDTH 1024
+#define SCREEN_HEIGHT 768
+// #define SCREEN_WIDTH 2560
+// #define SCREEN_HEIGHT 1440
 
 #define EYES_SPEED 0.08
 
@@ -57,7 +61,7 @@ typedef struct Position {
      : (state == GAME_OVER)        ? "GAME_OVER" \
                                    : "UNKNOWN")
 
-static float GAME_STATE_TO_TIME[] = {2.0, 1.0, 0.0};
+static float GAME_STATE_TO_TIME[] = {100.0, 1.0, 0.0};
 
 static char *SCENES_DIR = "resources/scenes";
 static int CURR_SCENE_ID;
@@ -87,9 +91,10 @@ static float EYES_TARGET_SHIFT;
 static float EYES_TARGET_UPLIFT;
 
 static void load_curr_scene(void);
+static void main_update(void);
 static void update_game(void);
 static void draw_ggui(void);
-static void draw_imgui(void);
+// static void draw_imgui(void);
 
 static bool ggui_button(Position pos, const char *text, int font_size);
 static Rectangle ggui_get_rec(Position pos, int width, int height);
@@ -101,26 +106,36 @@ static void update_value2(
 );
 
 int main(void) {
+    InitWindow(SCREEN_WIDTH, SCREEN_HEIGHT, "Golova");
     init_core(SCREEN_WIDTH, SCREEN_HEIGHT);
     SCENE_FILE_NAMES = get_file_names_in_dir(SCENES_DIR, &N_SCENES);
 
     load_curr_scene();
-    load_imgui();
+    // load_imgui();
 
+#if defined(PLATFORM_WEB)
+    emscripten_set_main_loop(main_update, 0, 1);
+#else
+    SetTargetFPS(60);
     while (!IS_EXIT_GAME) {
-        update_game();
-
-        draw_scene(true);
-
-        // Draw postfx and ui
-        BeginDrawing();
-        draw_postfx(IS_BLURED);
-        draw_ggui();
-        draw_imgui();
-        EndDrawing();
+        main_update();
     }
+#endif
 
     return 0;
+}
+
+static void main_update(void) {
+    update_game();
+
+    draw_scene(true);
+
+    // Draw postfx and ui
+    BeginDrawing();
+    draw_postfx(IS_BLURED);
+    draw_ggui();
+    // draw_imgui();
+    EndDrawing();
 }
 
 static void load_curr_scene(void) {
@@ -138,13 +153,16 @@ static void update_game(void) {
     TIME = GetTime();
     MOUSE_POSITION = GetMousePosition();
     IS_ESCAPE_PRESSED = IsKeyPressed(KEY_ESCAPE);
-    IS_LMB_PRESSED = IsMouseButtonPressed(0);
+    IS_LMB_PRESSED = IsMouseButtonPressed(MOUSE_BUTTON_LEFT);
     IS_ALTF4_PRESSED = IsKeyDown(KEY_LEFT_ALT) && IsKeyPressed(KEY_F4);
     MOUSE_RAY = GetMouseRay(MOUSE_POSITION, SCENE.camera);
 
+
+#if !defined(PLATFORM_WEB)
     if ((WindowShouldClose() || IS_ALTF4_PRESSED) && !IS_ESCAPE_PRESSED) {
         IS_EXIT_GAME = true;
     }
+#endif
 
     if (IS_ESCAPE_PRESSED) {
         if (PAUSE_STATE == NOT_PAUSED) NEXT_PAUSE_STATE = MAIN_PAUSE;
@@ -485,31 +503,31 @@ static void ggui_text(Position pos, const char *text, int font_size, Color color
     DrawText(text, rec.x, rec.y, font_size, color);
 }
 
-static void draw_imgui(void) {
-    begin_imgui();
-    ig_fix_window_top_left();
-    if (igBegin("Debug info", NULL, GHOST_WINDOW_FLAGS)) {
-        igText("scene_file_name: %s", SCENE_FILE_NAMES[CURR_SCENE_ID]);
-        igText("FPS: %d", GetFPS());
-        igText("GAME_STATE: %s", GAME_STATE_TO_NAME(GAME_STATE));
-        igText("PAUSE_STATE: %s", PAUSE_STATE_TO_NAME(PAUSE_STATE));
-        igText("TIME_REMAINING: %.2f", TIME_REMAINING);
-        igText("rule: %s", SCENE.board.rule);
-        igText("n_hits_required: %d", SCENE.board.n_hits_required);
-        igText("n_misses_allowed: %d", SCENE.board.n_misses_allowed);
-
-        const char *picked_item_name = "";
-        const char *picked_item_state = "";
-        if (PICKED_ITEM) {
-            picked_item_name = PICKED_ITEM->name;
-            picked_item_state = ITEM_STATE_TO_NAME(PICKED_ITEM->state);
-        }
-        igText("picked_item_name: %s", picked_item_name);
-        igText("picked_item_state: %s", picked_item_state);
-    }
-    igEnd();
-    end_imgui();
-}
+// static void draw_imgui(void) {
+//     begin_imgui();
+//     ig_fix_window_top_left();
+//     if (igBegin("Debug info", NULL, GHOST_WINDOW_FLAGS)) {
+//         igText("scene_file_name: %s", SCENE_FILE_NAMES[CURR_SCENE_ID]);
+//         igText("FPS: %d", GetFPS());
+//         igText("GAME_STATE: %s", GAME_STATE_TO_NAME(GAME_STATE));
+//         igText("PAUSE_STATE: %s", PAUSE_STATE_TO_NAME(PAUSE_STATE));
+//         igText("TIME_REMAINING: %.2f", TIME_REMAINING);
+//         igText("rule: %s", SCENE.board.rule);
+//         igText("n_hits_required: %d", SCENE.board.n_hits_required);
+//         igText("n_misses_allowed: %d", SCENE.board.n_misses_allowed);
+// 
+//         const char *picked_item_name = "";
+//         const char *picked_item_state = "";
+//         if (PICKED_ITEM) {
+//             picked_item_name = PICKED_ITEM->name;
+//             picked_item_state = ITEM_STATE_TO_NAME(PICKED_ITEM->state);
+//         }
+//         igText("picked_item_name: %s", picked_item_name);
+//         igText("picked_item_state: %s", picked_item_state);
+//     }
+//     igEnd();
+//     end_imgui();
+// }
 
 static void update_value(float dt, float speed, float *target, float *curr) {
     float todo = *target - *curr;

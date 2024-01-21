@@ -14,6 +14,12 @@
 #define SHADOWMAP_WIDTH 1024
 #define SHADOWMAP_HEIGHT 768
 
+#if defined(PLATFORM_WEB)
+    #define GLSL_VERSION "100"
+#else
+    #define GLSL_VERSION "330"
+#endif
+
 Scene SCENE;
 
 RenderTexture2D SHADOWMAP;
@@ -22,25 +28,22 @@ Material MATERIAL_DEFAULT;
 Mesh PLANE_MESH;
 Shader POSTFX_SHADER;
 
-static char *load_shader_src(const char *file_path);
-static Shader load_shader(const char *vs_file_path, const char *fs_file_path);
+static char *load_shader_src(const char *file_name);
+static Shader load_shader(const char *vs_name, const char *fs_name);
 
 void init_core(int screen_width, int screen_height) {
-    InitWindow(screen_width, screen_height, "Golova");
-    SetTargetFPS(60);
-
     MATERIAL_DEFAULT = LoadMaterialDefault();
     SHADOWMAP = LoadRenderTexture(SHADOWMAP_WIDTH, SHADOWMAP_HEIGHT);
     SetTextureWrap(SHADOWMAP.texture, TEXTURE_WRAP_CLAMP);
     SCREEN = LoadRenderTexture(screen_width, screen_height);
-    POSTFX_SHADER = load_shader(0, "resources/shaders/postfx.frag");
+    POSTFX_SHADER = load_shader(0, "postfx.frag");
 
     // -------------------------------------------------------------------
     // Load resources
     // Golova idle
     Texture2D texture = LoadTexture("resources/golova/sprites/golova_idle.png");
     SCENE.golova.idle.material = LoadMaterialDefault();
-    SCENE.golova.idle.material.shader = load_shader(0, "resources/shaders/sprite.frag");
+    SCENE.golova.idle.material.shader = load_shader(0, "sprite.frag");
     SCENE.golova.idle.material.maps[0].texture = texture;
     SCENE.golova.idle.mesh = GenMeshPlane(
         (float)texture.width / texture.height, 1.0, 2, 2
@@ -49,7 +52,7 @@ void init_core(int screen_width, int screen_height) {
     // Golova eat
     texture = LoadTexture("resources/golova/sprites/golova_eat.png");
     SCENE.golova.eat.material = LoadMaterialDefault();
-    SCENE.golova.eat.material.shader = load_shader(0, "resources/shaders/sprite.frag");
+    SCENE.golova.eat.material.shader = load_shader(0, "sprite.frag");
     SCENE.golova.eat.material.maps[0].texture = texture;
     SCENE.golova.eat.mesh = GenMeshPlane(
         (float)texture.width / texture.height, 1.0, 2, 2
@@ -58,7 +61,7 @@ void init_core(int screen_width, int screen_height) {
     // Golova cracks
     texture = LoadTexture("resources/golova/sprites/golova_cracks.png");
     SCENE.golova.cracks.material = LoadMaterialDefault();
-    SCENE.golova.cracks.material.shader = load_shader(0, "resources/shaders/sprite.frag");
+    SCENE.golova.cracks.material.shader = load_shader(0, "sprite.frag");
     SCENE.golova.cracks.material.maps[0].texture = texture;
     SCENE.golova.cracks.mesh = GenMeshPlane(
         (float)texture.width / texture.height, 1.0, 2, 2
@@ -66,7 +69,7 @@ void init_core(int screen_width, int screen_height) {
 
     // Golova eyes
     SCENE.golova.eyes_material = LoadMaterialDefault();
-    SCENE.golova.eyes_material.shader = load_shader(0, "resources/shaders/sprite.frag");
+    SCENE.golova.eyes_material.shader = load_shader(0, "sprite.frag");
 
     texture = LoadTexture("resources/golova/sprites/eye_left.png");
     SCENE.golova.eye_left.texture = texture;
@@ -82,17 +85,15 @@ void init_core(int screen_width, int screen_height) {
 
     // Board
     SCENE.board.material = LoadMaterialDefault();
-    SCENE.board.material.shader = load_shader(
-        "resources/shaders/board.vert", "resources/shaders/board.frag"
-    );
+    SCENE.board.material.shader = load_shader("board.vert", "board.frag");
     SCENE.board.mesh = GenMeshPlane(1.0, 1.0, 2, 2);
     SCENE.board.item_material = LoadMaterialDefault();
-    SCENE.board.item_material.shader = load_shader(0, "resources/shaders/item.frag");
+    SCENE.board.item_material.shader = load_shader(0, "item.frag");
     SCENE.board.item_mesh = GenMeshPlane(1.0, 1.0, 2, 2);
 
     // Forest
     SCENE.forest.trees_material = LoadMaterialDefault();
-    SCENE.forest.trees_material.shader = load_shader(0, "resources/shaders/sprite.frag");
+    SCENE.forest.trees_material.shader = load_shader(0, "sprite.frag");
 }
 
 void load_scene(const char *file_path) {
@@ -442,13 +443,11 @@ void draw_postfx(bool with_blur) {
     draw_postfx_ex(SCREEN.texture, with_blur);
 }
 
-static char *load_shader_src(const char *file_path) {
-    long size;
+static char *load_shader_src(const char *file_name) {
+    const char *version = TextFormat("#version %s", GLSL_VERSION);
+    char *common = LoadFileText(TextFormat("resources/shaders/%s/common.glsl", GLSL_VERSION));
+    char *text = LoadFileText(TextFormat("resources/shaders/%s/%s", GLSL_VERSION, file_name));
 
-    static char *version = "#version 330";
-    char *common = read_cstr_file("resources/shaders/common.glsl", "r", &size);
-
-    char *text = read_cstr_file(file_path, "r", &size);
     char *src = malloc(strlen(version) + strlen(common) + strlen(text) + 6);
 
     size_t p = 0;
@@ -462,8 +461,8 @@ static char *load_shader_src(const char *file_path) {
     p += 1;
     strcpy(&src[p], text);
 
-    free(common);
-    free(text);
+    UnloadFileText(common);
+    UnloadFileText(text);
 
     return src;
 }
