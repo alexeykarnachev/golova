@@ -621,6 +621,7 @@ static void draw_imgui(void) {
                     tree->transform.rotation,
                     QuaternionFromEuler(DEG2RAD * 90.0, 0.0, 0.0)
                 );
+                tree->matrix = MatrixIdentity();
             }
             for (size_t i = 0; i < f->n_trees; ++i) {
                 igPushID_Int(IG_ID++);

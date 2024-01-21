@@ -15,6 +15,7 @@ typedef enum GolovaState {
 typedef struct Golova {
     Transform transform;
     GolovaState state;
+    Matrix matrix;
 
     struct {
         Material material;
@@ -104,6 +105,8 @@ typedef struct Tree {
     Transform transform;
     Texture texture;
     Mesh mesh;
+
+    Matrix matrix;
 } Tree;
 
 #define MAX_N_FOREST_TREES 64

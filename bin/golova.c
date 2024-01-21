@@ -204,9 +204,37 @@ static void update_game(void) {
     }
 
     // -------------------------------------------------------------------
+    // Update trees
+    for (size_t i = 0; i < SCENE.forest.n_trees; ++i) {
+        Tree *tree = &SCENE.forest.trees[i];
+        rlPushMatrix();
+        rlTranslatef(
+            tree->transform.translation.x,
+            tree->transform.translation.y,
+            tree->transform.translation.z
+        );
+        float a = sinf(TIME) * 2.5;
+        rlRotatef(a, 1.0, 0.0, 0.0);
+        rlRotatef(a, 0.0, 1.0, 0.0);
+        rlRotatef(a, 0.0, 0.0, 1.0);
+        rlTranslatef(
+            -tree->transform.translation.x,
+            -tree->transform.translation.y,
+            -tree->transform.translation.z
+        );
+        tree->matrix = rlGetMatrixTransform();
+        rlPopMatrix();
+    }
+
+    // -------------------------------------------------------------------
     // Update Golova
     int health = CLAMP(SCENE.board.n_misses_allowed, 0, 3);
     SCENE.golova.cracks.strength = (3 - health) / 3.0f;
+
+    rlPushMatrix();
+    rlTranslatef(0.0, sinf(TIME * 2.0) * 0.015, 0.0);
+    SCENE.golova.matrix = rlGetMatrixTransform();
+    rlPopMatrix();
 
     // -------------------------------------------------------------------
     // Update Golova gaze
@@ -231,11 +259,11 @@ static void update_game(void) {
 
     // If there is no target item, just follow the mouse cursor (board collision)
     if (!has_target) {
-        // RayCollision collision = GetRayCollisionMesh(
-        //     MOUSE_RAY, SCENE.board.mesh, get_transform_matrix(SCENE.board.transform)
-        // );
-        // has_target = collision.hit;
-        // target = collision.point;
+        RayCollision collision = GetRayCollisionMesh(
+            MOUSE_RAY, SCENE.board.mesh, get_transform_matrix(SCENE.board.transform)
+        );
+        has_target = collision.hit;
+        target = collision.point;
     }
 
     if (has_target) {

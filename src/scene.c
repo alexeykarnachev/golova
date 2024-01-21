@@ -100,6 +100,7 @@ void load_scene(const char *file_path) {
 
     // Golova
     SCENE.golova.transform = get_default_transform();
+    SCENE.golova.matrix = MatrixIdentity();
     SCENE.golova.eyes_idle_scale = 0.056;
     SCENE.golova.eyes_idle_uplift = 0.027;
     SCENE.golova.eyes_idle_shift = 0.014;
@@ -243,6 +244,7 @@ void load_forest(Forest *forest, const char *file_path) {
         tree->mesh = GenMeshPlane(
             (float)tree->texture.width / tree->texture.height, 1.0, 2, 2
         );
+        tree->matrix = MatrixIdentity();
     }
 }
 
@@ -349,7 +351,9 @@ void draw_scene_ex(
 
     // Golova
     Transform golova_transform = SCENE.golova.transform;
-    Matrix golova_mat = get_transform_matrix(golova_transform);
+    Matrix golova_mat = MatrixMultiply(
+        get_transform_matrix(golova_transform), SCENE.golova.matrix
+    );
     Mesh golova_mesh;
     Material golova_material;
     if (SCENE.golova.state == GOLOVA_IDLE) {
@@ -359,10 +363,10 @@ void draw_scene_ex(
         golova_mesh = SCENE.golova.eat.mesh;
         golova_material = SCENE.golova.eat.material;
     }
-    draw_mesh_t(golova_transform, golova_material, golova_mesh);
+    draw_mesh_m(golova_mat, golova_material, golova_mesh);
 
     // Golova cracks
-    Matrix cracks_matrix = get_transform_matrix(golova_transform);
+    Matrix cracks_matrix = golova_mat;
     cracks_matrix = MatrixMultiply(MatrixTranslate(0.0, 0.01, 0.0), cracks_matrix);
     SCENE.golova.cracks.material.maps[0].color = MAGENTA;
     SCENE.golova.cracks.material.maps[0].color.a = (int
@@ -405,7 +409,8 @@ void draw_scene_ex(
     for (size_t i = 0; i < SCENE.forest.n_trees; ++i) {
         Tree *tree = &SCENE.forest.trees[i];
         SCENE.forest.trees_material.maps[0].texture = tree->texture;
-        draw_mesh_t(tree->transform, SCENE.forest.trees_material, tree->mesh);
+        Matrix mat = MatrixMultiply(get_transform_matrix(tree->transform), tree->matrix);
+        draw_mesh_m(mat, SCENE.forest.trees_material, tree->mesh);
     }
 
     // Items
