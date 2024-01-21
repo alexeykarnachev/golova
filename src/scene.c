@@ -96,6 +96,8 @@ void init_core(int screen_width, int screen_height) {
 }
 
 void load_scene(const char *file_path) {
+    static char fp[2048];
+
     // Golova
     SCENE.golova.transform = get_default_transform();
     SCENE.golova.eyes_idle_scale = 0.056;
@@ -150,6 +152,13 @@ void load_scene(const char *file_path) {
         fread(&SCENE.board.item_elevation, sizeof(float), 1, f);
         fread(&SCENE.board.n_items, sizeof(int), 1, f);
 
+        // Forest
+        fread(&SCENE.forest.name, sizeof(SCENE.forest.name), 1, f);
+        if (SCENE.forest.name[0] != '\0') {
+            sprintf(fp, "resources/forests/%s.fst", SCENE.forest.name);
+            load_forest(&SCENE.forest, fp);
+        }
+
         for (size_t i = 0; i < SCENE.board.n_items; ++i) {
             Item *item = &SCENE.board.items[i];
             fread(&item->matrix, sizeof(Matrix), 1, f);
@@ -158,7 +167,6 @@ void load_scene(const char *file_path) {
             item->state = ITEM_COLD;
 
             if (item->name[0] != '\0') {
-                static char fp[2048];
                 sprintf(fp, "resources/items/sprites/%s.png", item->name);
                 if (IsTextureReady(item->texture)) UnloadTexture(item->texture);
                 item->texture = LoadTexture(fp);
@@ -198,6 +206,9 @@ void save_scene(const char *file_path) {
     fwrite(&SCENE.board.item_elevation, sizeof(float), 1, f);
     fwrite(&SCENE.board.n_items, sizeof(int), 1, f);
 
+    // Forest
+    fwrite(&SCENE.forest.name, sizeof(SCENE.forest.name), 1, f);
+
     // Items
     for (size_t i = 0; i < SCENE.board.n_items; ++i) {
         Item *item = &SCENE.board.items[i];
@@ -209,6 +220,41 @@ void save_scene(const char *file_path) {
     TraceLog(LOG_INFO, "Scene saved: %s", file_path);
 
     fclose(f);
+}
+
+void load_forest(Forest *forest, const char *file_path) {
+    for (size_t i = 0; i < forest->n_trees; ++i) {
+        Tree *tree = &forest->trees[i];
+        UnloadTexture(tree->texture);
+        UnloadMesh(tree->mesh);
+    }
+
+    FILE *f = fopen(file_path, "rb");
+    fread(&forest->name, sizeof(forest->name), 1, f);
+    fread(&forest->n_trees, sizeof(size_t), 1, f);
+    for (size_t i = 0; i < forest->n_trees; ++i) {
+        Tree *tree = &forest->trees[i];
+        fread(&tree->name, sizeof(tree->name), 1, f);
+        fread(&tree->transform, sizeof(Transform), 1, f);
+
+        static char fp[2048];
+        sprintf(fp, "resources/trees/sprites/%s.png", tree->name);
+        tree->texture = LoadTexture(fp);
+        tree->mesh = GenMeshPlane(
+            (float)tree->texture.width / tree->texture.height, 1.0, 2, 2
+        );
+    }
+}
+
+void save_forest(Forest *forest, const char *file_path) {
+    FILE *f = fopen(file_path, "wb");
+    fwrite(&forest->name, sizeof(forest->name), 1, f);
+    fwrite(&forest->n_trees, sizeof(size_t), 1, f);
+    for (size_t i = 0; i < forest->n_trees; ++i) {
+        Tree *tree = &forest->trees[i];
+        fwrite(&tree->name, sizeof(tree->name), 1, f);
+        fwrite(&tree->transform, sizeof(Transform), 1, f);
+    }
 }
 
 static void draw_items(bool with_borders) {

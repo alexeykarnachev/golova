@@ -1,5 +1,4 @@
 #include "../src/cimgui_utils.h"
-#include "../src/drawing.h"
 #include "../src/math.h"
 #include "../src/scene.h"
 #include "../src/utils.h"
@@ -232,11 +231,11 @@ static void update_game(void) {
 
     // If there is no target item, just follow the mouse cursor (board collision)
     if (!has_target) {
-        RayCollision collision = GetRayCollisionMesh(
-            MOUSE_RAY, SCENE.board.mesh, get_transform_matrix(SCENE.board.transform)
-        );
-        has_target = collision.hit;
-        target = collision.point;
+        // RayCollision collision = GetRayCollisionMesh(
+        //     MOUSE_RAY, SCENE.board.mesh, get_transform_matrix(SCENE.board.transform)
+        // );
+        // has_target = collision.hit;
+        // target = collision.point;
     }
 
     if (has_target) {

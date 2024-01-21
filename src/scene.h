@@ -18,14 +18,17 @@ typedef struct Golova {
 
     struct {
         Material material;
+        Mesh mesh;
     } idle;
 
     struct {
         Material material;
+        Mesh mesh;
     } eat;
 
     struct {
         Material material;
+        Mesh mesh;
         float strength;
     } cracks;
 
@@ -42,10 +45,12 @@ typedef struct Golova {
 
     struct {
         Texture2D texture;
+        Mesh mesh;
     } eye_left;
 
     struct {
         Texture2D texture;
+        Mesh mesh;
     } eye_right;
 } Golova;
 
@@ -78,6 +83,7 @@ typedef struct Item {
 typedef struct Board {
     Transform transform;
     Material material;
+    Mesh mesh;
 
     char rule[MAX_RULE_LENGTH];
 
@@ -88,6 +94,7 @@ typedef struct Board {
     float item_elevation;
 
     Material item_material;
+    Mesh item_mesh;
     int n_items;
     Item items[MAX_N_BOARD_ITEMS];
 } Board;
@@ -96,6 +103,7 @@ typedef struct Tree {
     char name[MAX_NAME_LENGTH];
     Transform transform;
     Texture texture;
+    Mesh mesh;
 } Tree;
 
 #define MAX_N_FOREST_TREES 64
@@ -119,8 +127,13 @@ typedef struct Scene {
 extern Scene SCENE;
 
 void init_core(int screen_width, int screen_height);
+
 void load_scene(const char *file_path);
 void save_scene(const char *file_path);
+
+void load_forest(Forest *forest, const char *file_path);
+void save_forest(Forest *forest, const char *file_path);
+
 void draw_scene(bool with_shadows);
 void draw_scene_ex(
     RenderTexture2D screen, Color clear_color, Camera3D camera, bool with_shadows

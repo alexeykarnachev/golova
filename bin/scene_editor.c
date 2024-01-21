@@ -48,6 +48,7 @@ typedef struct CameraShell {
 } CameraShell;
 
 static nfdfilteritem_t NFD_TEXTURE_FILTER[1] = {{"Texture", "png"}};
+static nfdfilteritem_t NFD_FOREST_FILTER[1] = {{"Forest", "fst"}};
 
 static RenderTexture2D FULL_SCREEN;
 static RenderTexture2D PREVIEW_SCREEN;
@@ -66,6 +67,7 @@ static CollisionInfo COLLISION_INFOS[MAX_N_COLLISION_INFOS];
 static bool IS_MMB_DOWN;
 static bool IS_LMB_PRESSED;
 static bool IS_SHIFT_DOWN;
+static bool IS_DELETE_PRESSED;
 static float MOUSE_WHEEL_MOVE;
 static Vector2 MOUSE_POSITION;
 static Vector2 MOUSE_DELTA;
@@ -81,26 +83,24 @@ static void *get_picked_entity(void);
 static EntityType get_picked_entity_type(void);
 
 static void reset_camera_shells();
-static void update_scene_save_load(void);
-static void update_collision_infos(void);
-static void update_input(void);
-static void update_board_items(void);
-static void update_picking(void);
-static void update_camera_shells();
-static void update_camera(void);
-static void update_gizmo(void);
+static void update_editor(void);
 static void set_board_values(int n_items, int n_hits_required, int n_misses_allowed);
 static void draw_editor_grid(void);
 static void draw_camera_shells(void);
 static void draw_item_boxes(void);
 static void draw_imgui(void);
 
-static void load_sprite(const char* search_path, char* dst_name, Texture2D *dst_texture);
+static void load_sprite(
+    const char *search_path,
+    char *dst_name,
+    Transform *dst_transform,
+    Texture2D *dst_texture,
+    Mesh *dst_mesh
+);
 
 int main(void) {
     init_core(SCREEN_WIDTH, SCREEN_HEIGHT);
-    // load_scene(NULL);
-    load_scene("resources/scenes/0000.scn");
+    load_scene(NULL);
     load_imgui();
 
     FULL_SCREEN = LoadRenderTexture(SCREEN_WIDTH, SCREEN_HEIGHT);
@@ -126,14 +126,7 @@ int main(void) {
     CAMERA.up = (Vector3){0.0, 1.0, 0.0};
 
     while (!WindowShouldClose()) {
-        update_scene_save_load();
-        update_collision_infos();
-        update_input();
-        update_board_items();
-        update_gizmo();
-        update_camera();
-        update_camera_shells();
-        update_picking();
+        update_editor();
 
         // Draw main editor screen
         draw_scene_ex(FULL_SCREEN, DARKGRAY, CAMERA, WITH_SHADOWS);
@@ -209,7 +202,29 @@ static void reset_camera_shells(void) {
     }
 }
 
-static void update_scene_save_load(void) {
+static void delete_tree(size_t idx) {
+    Tree *tree = &SCENE.forest.trees[idx];
+    UnloadTexture(tree->texture);
+    UnloadMesh(tree->mesh);
+    SCENE.forest.n_trees -= 1;
+    size_t n_move = SCENE.forest.n_trees - idx;
+    if (n_move > 0) {
+        size_t size_move = n_move * sizeof(SCENE.forest.trees[0]);
+        memmove(&SCENE.forest.trees[idx], &SCENE.forest.trees[idx + 1], size_move);
+    }
+}
+
+static void update_editor(void) {
+    IS_MMB_DOWN = IsMouseButtonDown(2) && !IS_IG_INTERACTED;
+    IS_LMB_PRESSED = IsMouseButtonPressed(0) && !IS_IG_INTERACTED;
+    IS_SHIFT_DOWN = IsKeyDown(KEY_LEFT_SHIFT) && !IS_IG_INTERACTED;
+    IS_DELETE_PRESSED = IsKeyPressed(KEY_DELETE);
+    MOUSE_POSITION = GetMousePosition();
+    MOUSE_DELTA = GetMouseDelta();
+    MOUSE_WHEEL_MOVE = GetMouseWheelMove() * (int)(!IS_IG_INTERACTED);
+
+    // ------------------------------------------------------------------
+    // Scene save/load
     bool is_save_pressed = IsKeyDown(KEY_LEFT_CONTROL) && IsKeyPressed(KEY_S);
     bool is_load_pressed = IsKeyDown(KEY_LEFT_CONTROL) && IsKeyPressed(KEY_O);
     static nfdfilteritem_t filter[1] = {{"Scene", "scn"}};
@@ -232,9 +247,9 @@ static void update_scene_save_load(void) {
             strcpy(SCENE_FILE_PATH, fp);
         }
     }
-}
 
-static void update_collision_infos(void) {
+    // ------------------------------------------------------------------
+    // Collision infos
     N_COLLISION_INFOS = 0;
 
     COLLISION_INFOS[N_COLLISION_INFOS].entity_type = GOLOVA_TYPE;
@@ -271,24 +286,14 @@ static void update_collision_infos(void) {
         COLLISION_INFOS[N_COLLISION_INFOS].entity = tree;
         COLLISION_INFOS[N_COLLISION_INFOS++].mesh = tree->mesh;
     }
-}
 
-static void update_input(void) {
-    IS_MMB_DOWN = IsMouseButtonDown(2) && !IS_IG_INTERACTED;
-    IS_LMB_PRESSED = IsMouseButtonPressed(0) && !IS_IG_INTERACTED;
-    IS_SHIFT_DOWN = IsKeyDown(KEY_LEFT_SHIFT) && !IS_IG_INTERACTED;
-    MOUSE_POSITION = GetMousePosition();
-    MOUSE_DELTA = GetMouseDelta();
-    MOUSE_WHEEL_MOVE = GetMouseWheelMove();
-}
-
-static void update_board_items(void) {
+    // -------------------------------------------------------------------
+    // Board items
     Board *b = &SCENE.board;
     Transform t = b->transform;
     t.scale = Vector3Scale(Vector3One(), t.scale.x);
 
     size_t n_items = b->n_items;
-    if (n_items == 0) return;
 
     int n_rows = sqrt(n_items);
     int n_cols = ceil((float)n_items / n_rows);
@@ -313,20 +318,23 @@ static void update_board_items(void) {
         }
         rlPopMatrix();
     }
-}
 
-static void update_gizmo(void) {
-    Transform *t = get_picked_transform();
-    if (!t) return;
+    // -------------------------------------------------------------------
+    // Gizmo
+    Transform *picked_transform = get_picked_transform();
+    if (picked_transform) {
+        rgizmo_update(&GIZMO, CAMERA, picked_transform->translation);
+        picked_transform->translation = Vector3Add(
+            picked_transform->translation, GIZMO.update.translation
+        );
+        picked_transform->rotation = QuaternionMultiply(
+            QuaternionFromAxisAngle(GIZMO.update.axis, GIZMO.update.angle),
+            picked_transform->rotation
+        );
+    }
 
-    rgizmo_update(&GIZMO, CAMERA, t->translation);
-    t->translation = Vector3Add(t->translation, GIZMO.update.translation);
-    t->rotation = QuaternionMultiply(
-        QuaternionFromAxisAngle(GIZMO.update.axis, GIZMO.update.angle), t->rotation
-    );
-}
-
-static void update_camera(void) {
+    // -------------------------------------------------------------------
+    // Editor camera
     static float rot_speed = 0.003f;
     static float move_speed = 0.01f;
     static float zoom_speed = 1.0f;
@@ -351,35 +359,9 @@ static void update_camera(void) {
 
     // Bring camera closer (or move away), to the look-at point
     CameraMoveToTarget(&CAMERA, -MOUSE_WHEEL_MOVE * zoom_speed);
-}
 
-static void update_picking(void) {
-    if (!IS_LMB_PRESSED || GIZMO.state != RGIZMO_STATE_COLD) return;
-
-    PICKED_COLLISION_INFO = NULL;
-    Ray ray = GetMouseRay(MOUSE_POSITION, CAMERA);
-
-    for (size_t id = 0; id < N_COLLISION_INFOS; ++id) {
-        CollisionInfo *info = &COLLISION_INFOS[id];
-
-        Matrix matrix;
-        matrix = info->transform ? get_transform_matrix(*info->transform) : info->matrix;
-        info->collision = GetRayCollisionMesh(ray, info->mesh, matrix);
-
-        if (!info->collision.hit) continue;
-
-        if (!PICKED_COLLISION_INFO) {
-            PICKED_COLLISION_INFO = info;
-            continue;
-        }
-
-        if (info->collision.distance < PICKED_COLLISION_INFO->collision.distance) {
-            PICKED_COLLISION_INFO = info;
-        }
-    }
-}
-
-static void update_camera_shells(void) {
+    // -------------------------------------------------------------------
+    // Camera shells
     CameraShell *shells[2] = {&CAMERA_SHELL, &LIGHT_CAMERA_SHELL};
     for (size_t i = 0; i < 2; ++i) {
         CameraShell *shell = shells[i];
@@ -388,6 +370,44 @@ static void update_camera_shells(void) {
             (Vector3){0.0, 0.0, -1.0}, shell->transform.rotation
         );
         shell->camera->target = Vector3Add(shell->camera->position, dir);
+    }
+
+    // -------------------------------------------------------------------
+    // Picking
+    if (IS_LMB_PRESSED && GIZMO.state == RGIZMO_STATE_COLD) {
+        PICKED_COLLISION_INFO = NULL;
+        Ray ray = GetMouseRay(MOUSE_POSITION, CAMERA);
+
+        for (size_t id = 0; id < N_COLLISION_INFOS; ++id) {
+            CollisionInfo *info = &COLLISION_INFOS[id];
+
+            Matrix matrix;
+            matrix = info->transform ? get_transform_matrix(*info->transform)
+                                     : info->matrix;
+            info->collision = GetRayCollisionMesh(ray, info->mesh, matrix);
+
+            if (!info->collision.hit) continue;
+
+            if (!PICKED_COLLISION_INFO) {
+                PICKED_COLLISION_INFO = info;
+                continue;
+            }
+
+            if (info->collision.distance < PICKED_COLLISION_INFO->collision.distance) {
+                PICKED_COLLISION_INFO = info;
+            }
+        }
+    }
+
+    // -------------------------------------------------------------------
+    // Forest
+    if (IS_DELETE_PRESSED && PICKED_COLLISION_INFO->entity) {
+        for (size_t i = 0; i < SCENE.forest.n_trees; ++i) {
+            if (&SCENE.forest.trees[i] == PICKED_COLLISION_INFO->entity) {
+                delete_tree(i);
+                PICKED_COLLISION_INFO = NULL;
+            }
+        }
     }
 }
 
@@ -449,6 +469,7 @@ static void draw_item_boxes(void) {
 }
 
 static void draw_imgui(void) {
+    int screen_height = GetScreenHeight();
     begin_imgui();
 
     IG_ID = 1;
@@ -456,6 +477,7 @@ static void draw_imgui(void) {
     IS_IG_INTERACTED = io->WantCaptureMouse || io->WantCaptureKeyboard;
 
     ig_fix_window_top_left();
+    igSetNextWindowSize((ImVec2){0, screen_height - 30}, 0);
     if (igBegin("Inspector", NULL, 0)) {
         if (ig_collapsing_header("Debug", true)) {
             igCheckbox("WITH_SHADOWS", &WITH_SHADOWS);
@@ -506,74 +528,6 @@ static void draw_imgui(void) {
             set_board_values(n_items, n_hits_required, n_misses_allowed);
         }
 
-        if (ig_collapsing_header("Forest", true)) {
-            Forest *f = &SCENE.forest;
-            igText("N trees: %d", f->n_trees);
-            if (f->n_trees < MAX_N_FOREST_TREES && igButton("New tree", (ImVec2){0.0, 0.0})) {
-                Tree *tree = &f->trees[f->n_trees++];
-                load_sprite("resources/trees/sprites", tree->name, &tree->transform, &tree->texture, &tree->mesh);
-            }
-
-            igSeparatorText("Trees");
-            for (size_t i = 0; i < f->n_trees; ++i) {
-                igPushID_Int(IG_ID++);
-
-                Tree *tree = &f->trees[i];
-                igText(tree->name);
-
-                Texture2D texture = tree->texture;
-                int texture_id = texture.id;
-                
-                bool is_clicked = igImageButton(
-                    "Texture",
-                    (ImTextureID)(long)texture_id,
-                    (ImVec2){64.0, 64.0},
-                    (ImVec2){0.0, 0.0},
-                    (ImVec2){1.0, 1.0},
-                    (ImVec4){1.0, 1.0, 1.0, 1.0},
-                    (ImVec4){1.0, 1.0, 1.0, 1.0}
-                );
-
-                if (is_clicked) load_sprite("resources/trees/sprites", tree->name, &tree->transform, &tree->texture, &tree->mesh);
-                igSameLine(0, 0);
-
-                igBeginGroup();
-                if (igButton("Pick", (ImVec2){0.0, 0.0})) {
-                    for (size_t i = 0; i < N_COLLISION_INFOS; ++i) {
-                        CollisionInfo *info = &COLLISION_INFOS[i];
-                        if (info->entity == tree) PICKED_COLLISION_INFO = info;
-                    }
-                }
-
-
-                if (igButton("Remove", (ImVec2){0.0, 0.0})) {
-                    size_t pop_idx;
-                    for (size_t i = 0; i < SCENE.forest.n_trees; ++i) {
-                        if (&SCENE.forest.trees[i] == tree) {
-                            UnloadMesh(tree->mesh);
-                            // UnloadTexture(tree->texture);
-                            pop_idx = i;
-                            SCENE.forest.n_trees -= 1;
-                            if (PICKED_COLLISION_INFO && PICKED_COLLISION_INFO->entity == tree) {
-                                PICKED_COLLISION_INFO = NULL;
-                            }
-                            break;
-                        };
-                    }
-
-                    // size_t n_move = SCENE.forest.n_trees - pop_idx;
-                    // if (n_move > 0) {
-                    //     size_t size_move = n_move * sizeof(SCENE.forest.trees[0]);
-                    //     memmove(&SCENE.forest.trees[pop_idx], &SCENE.forest.trees[pop_idx + 1], size_move);
-                    // }
-                }
-                igEndGroup();
-
-                igPopID();
-            }
-
-        }
-
         if (ig_collapsing_header("Item", true) && get_picked_entity_type() == ITEM_TYPE) {
             Item *item = get_picked_entity();
             Texture2D texture = item->texture;
@@ -589,7 +543,8 @@ static void draw_imgui(void) {
                 (ImVec4){1.0, 1.0, 1.0, 1.0}
             );
 
-            if (is_clicked) load_sprite("resources/items/sprites", item->name, 0, &item->texture, 0);
+            if (is_clicked)
+                load_sprite("resources/items/sprites", item->name, 0, &item->texture, 0);
 
             igSameLine(0.0, 5.0);
             igBeginGroup();
@@ -610,6 +565,103 @@ static void draw_imgui(void) {
             e = Vector3Scale(e, DEG2RAD);
             t->rotation = QuaternionFromEuler(e.x, e.y, e.z);
         }
+
+        if (ig_collapsing_header("Forest", true)) {
+            Forest *f = &SCENE.forest;
+            igText("%s", f->name);
+            igText("N trees: %d", f->n_trees);
+
+            if (igButton("Save##forest", (ImVec2){0.0, 0.0})) {
+                char *fp = save_nfd("resources/forests", NFD_FOREST_FILTER, 1);
+                if (fp != NULL) {
+                    get_file_name(f->name, fp, true);
+                    save_forest(f, fp);
+                    NFD_FreePathN(fp);
+                }
+            }
+
+            igSameLine(0, 5);
+            if (igButton("Load##forest", (ImVec2){0.0, 0.0})) {
+                char *fp = open_nfd("resources/forests", NFD_FOREST_FILTER, 1);
+                if (fp != NULL) {
+                    load_forest(f, fp);
+                    NFD_FreePathN(fp);
+                }
+            }
+
+            igSeparatorText("Trees");
+            if (f->n_trees < MAX_N_FOREST_TREES
+                && igButton("New tree", (ImVec2){0.0, 0.0})) {
+                Tree *tree = &f->trees[f->n_trees++];
+                load_sprite(
+                    "resources/trees/sprites",
+                    tree->name,
+                    &tree->transform,
+                    &tree->texture,
+                    &tree->mesh
+                );
+            }
+            for (size_t i = 0; i < f->n_trees; ++i) {
+                igPushID_Int(IG_ID++);
+
+                if (i % 3 != 0) igSameLine(0, 5);
+                igBeginGroup();
+
+                Tree *tree = &f->trees[i];
+                igText(tree->name);
+
+                Texture2D texture = tree->texture;
+                int texture_id = texture.id;
+
+                bool is_clicked = igImageButton(
+                    "Texture",
+                    (ImTextureID)(long)texture_id,
+                    (ImVec2){64.0, 64.0},
+                    (ImVec2){0.0, 0.0},
+                    (ImVec2){1.0, 1.0},
+                    (ImVec4){1.0, 1.0, 1.0, 1.0},
+                    (ImVec4){1.0, 1.0, 1.0, 1.0}
+                );
+
+                if (is_clicked)
+                    load_sprite(
+                        "resources/trees/sprites",
+                        tree->name,
+                        &tree->transform,
+                        &tree->texture,
+                        &tree->mesh
+                    );
+                igSameLine(0, 3);
+
+                igBeginGroup();
+                if (igButton("Pick", (ImVec2){0.0, 0.0})) {
+                    for (size_t i = 0; i < N_COLLISION_INFOS; ++i) {
+                        CollisionInfo *info = &COLLISION_INFOS[i];
+                        if (info->entity == tree) PICKED_COLLISION_INFO = info;
+                    }
+                }
+
+                if (igButton("Remove", (ImVec2){0.0, 0.0})) {
+                    size_t pop_idx;
+                    for (size_t i = 0; i < SCENE.forest.n_trees; ++i) {
+                        if (&SCENE.forest.trees[i] == tree) {
+                            pop_idx = i;
+                            if (PICKED_COLLISION_INFO
+                                && PICKED_COLLISION_INFO->entity == tree) {
+                                PICKED_COLLISION_INFO = NULL;
+                            }
+                            break;
+                        };
+                    }
+
+                    delete_tree(pop_idx);
+                }
+                igEndGroup();
+                igEndGroup();
+
+                igPopID();
+            }
+        }
     }
     igEnd();
 
@@ -622,16 +674,26 @@ static void draw_imgui(void) {
     end_imgui();
 }
 
-static void load_sprite(const char* search_path, char* dst_name, Texture2D *dst_texture) {
+static void load_sprite(
+    const char *search_path,
+    char *dst_name,
+    Transform *dst_transform,
+    Texture2D *dst_texture,
+    Mesh *dst_mesh
+) {
     char *fp = open_nfd(search_path, NFD_TEXTURE_FILTER, 1);
     if (fp != NULL) {
         get_file_name(dst_name, fp, true);
-        bool is_reset_mesh = false;
-        if (IsTextureReady(*dst_texture)) {
-            UnloadTexture(*dst_texture);
-            is_reset_mesh = true;
-        }
         *dst_texture = LoadTexture(fp);
         NFD_FreePathN(fp);
+
+        if (dst_mesh) {
+            float aspect = (float)dst_texture->width / dst_texture->height;
+            *dst_mesh = GenMeshPlane(aspect, 1.0, 2, 2);
+        }
+
+        if (dst_transform) {
+            *dst_transform = get_default_transform();
+        }
     }
 }
