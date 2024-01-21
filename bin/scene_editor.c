@@ -214,6 +214,11 @@ static void delete_tree(size_t idx) {
     }
 }
 
+static void unpick(void) {
+    PICKED_COLLISION_INFO = NULL;
+    GIZMO.state = RGIZMO_STATE_COLD;
+}
+
 static void update_editor(void) {
     IS_MMB_DOWN = IsMouseButtonDown(2) && !IS_IG_INTERACTED;
     IS_LMB_PRESSED = IsMouseButtonPressed(0) && !IS_IG_INTERACTED;
@@ -320,20 +325,6 @@ static void update_editor(void) {
     }
 
     // -------------------------------------------------------------------
-    // Gizmo
-    Transform *picked_transform = get_picked_transform();
-    if (picked_transform) {
-        rgizmo_update(&GIZMO, CAMERA, picked_transform->translation);
-        picked_transform->translation = Vector3Add(
-            picked_transform->translation, GIZMO.update.translation
-        );
-        picked_transform->rotation = QuaternionMultiply(
-            QuaternionFromAxisAngle(GIZMO.update.axis, GIZMO.update.angle),
-            picked_transform->rotation
-        );
-    }
-
-    // -------------------------------------------------------------------
     // Editor camera
     static float rot_speed = 0.003f;
     static float move_speed = 0.01f;
@@ -375,7 +366,7 @@ static void update_editor(void) {
     // -------------------------------------------------------------------
     // Picking
     if (IS_LMB_PRESSED && GIZMO.state == RGIZMO_STATE_COLD) {
-        PICKED_COLLISION_INFO = NULL;
+        unpick();
         Ray ray = GetMouseRay(MOUSE_POSITION, CAMERA);
 
         for (size_t id = 0; id < N_COLLISION_INFOS; ++id) {
@@ -405,9 +396,24 @@ static void update_editor(void) {
         for (size_t i = 0; i < SCENE.forest.n_trees; ++i) {
             if (&SCENE.forest.trees[i] == PICKED_COLLISION_INFO->entity) {
                 delete_tree(i);
-                PICKED_COLLISION_INFO = NULL;
+                unpick();
+                break;
             }
         }
+    }
+
+    // -------------------------------------------------------------------
+    // Gizmo
+    Transform *picked_transform = get_picked_transform();
+    if (picked_transform) {
+        rgizmo_update(&GIZMO, CAMERA, picked_transform->translation);
+        picked_transform->translation = Vector3Add(
+            picked_transform->translation, GIZMO.update.translation
+        );
+        picked_transform->rotation = QuaternionMultiply(
+            QuaternionFromAxisAngle(GIZMO.update.axis, GIZMO.update.angle),
+            picked_transform->rotation
+        );
     }
 }
 
@@ -521,7 +527,7 @@ static void draw_imgui(void) {
             int n_hits_required = b->n_hits_required;
             int n_misses_allowed = b->n_misses_allowed;
             if (igInputInt("N items", &n_items, 1, 1, 0)) {
-                PICKED_COLLISION_INFO = NULL;
+                unpick();
             }
             igInputInt("N hits required", &n_hits_required, 1, 1, 0);
             igInputInt("N misses allowed", &n_misses_allowed, 1, 1, 0);
@@ -648,7 +654,7 @@ static void draw_imgui(void) {
                             pop_idx = i;
                             if (PICKED_COLLISION_INFO
                                 && PICKED_COLLISION_INFO->entity == tree) {
-                                PICKED_COLLISION_INFO = NULL;
+                                unpick();
                             }
                             break;
                         };
