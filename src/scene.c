@@ -336,19 +336,6 @@ void draw_scene_ex(
     ClearBackground(clear_color);
     BeginMode3D(camera);
 
-    // Board
-    Shader shader = SCENE.board.material.shader;
-    SCENE.board.material.maps[0].texture = SHADOWMAP.texture;
-    SetShaderValueMatrix(shader, GetShaderLocation(shader, "u_light_vp"), light_vp);
-    int u_with_shadows = (int)with_shadows;
-    SetShaderValue(
-        shader,
-        GetShaderLocation(shader, "u_with_shadows"),
-        &u_with_shadows,
-        SHADER_UNIFORM_INT
-    );
-    draw_mesh_t(SCENE.board.transform, SCENE.board.material, SCENE.board.mesh);
-
     // Golova
     Transform golova_transform = SCENE.golova.transform;
     Matrix golova_mat = MatrixMultiply(
@@ -412,6 +399,19 @@ void draw_scene_ex(
         Matrix mat = MatrixMultiply(get_transform_matrix(tree->transform), tree->matrix);
         draw_mesh_m(mat, SCENE.forest.trees_material, tree->mesh);
     }
+
+    // Board
+    Shader shader = SCENE.board.material.shader;
+    SCENE.board.material.maps[0].texture = SHADOWMAP.texture;
+    SetShaderValueMatrix(shader, GetShaderLocation(shader, "u_light_vp"), light_vp);
+    int u_with_shadows = (int)with_shadows;
+    SetShaderValue(
+        shader,
+        GetShaderLocation(shader, "u_with_shadows"),
+        &u_with_shadows,
+        SHADER_UNIFORM_INT
+    );
+    draw_mesh_t(SCENE.board.transform, SCENE.board.material, SCENE.board.mesh);
 
     // Items
     draw_items(true);
