@@ -77,6 +77,7 @@ static bool IS_IG_INTERACTED;
 
 static bool WITH_SHADOWS = true;
 static bool WITH_BLUR = false;
+static int CLEAR_COLOR[3];
 
 static Transform *get_picked_transform(void);
 static void *get_picked_entity(void);
@@ -90,7 +91,7 @@ static void draw_camera_shells(void);
 static void draw_item_boxes(void);
 static void draw_imgui(void);
 
-static void load_sprite(
+static bool load_sprite(
     const char *search_path,
     char *dst_name,
     Transform *dst_transform,
@@ -128,8 +129,10 @@ int main(void) {
     while (!WindowShouldClose()) {
         update_editor();
 
+        bool sort_trees = get_picked_entity_type() != TREE_TYPE;
+
         // Draw main editor screen
-        draw_scene_ex(FULL_SCREEN, DARKGRAY, CAMERA, WITH_SHADOWS);
+        draw_scene_ex(FULL_SCREEN, DARKGRAY, CAMERA, WITH_SHADOWS, sort_trees);
 
         BeginTextureMode(FULL_SCREEN);
         rlDisableBackfaceCulling();
@@ -157,7 +160,10 @@ int main(void) {
 
         // Draw scene preview screen
         rlEnableBackfaceCulling();
-        draw_scene_ex(PREVIEW_SCREEN, BLACK, SCENE.camera, WITH_SHADOWS);
+        Color clear_color = {CLEAR_COLOR[0], CLEAR_COLOR[1], CLEAR_COLOR[2], 255};
+        draw_scene_ex(
+            PREVIEW_SCREEN, clear_color, SCENE.camera, WITH_SHADOWS, sort_trees
+        );
 
         BeginTextureMode(PREVIEW_SCREEN_POSTFX);
         draw_postfx_ex(PREVIEW_SCREEN.texture, WITH_BLUR);
@@ -486,8 +492,12 @@ static void draw_imgui(void) {
     igSetNextWindowSize((ImVec2){0, screen_height - 30}, 0);
     if (igBegin("Inspector", NULL, 0)) {
         if (ig_collapsing_header("Debug", true)) {
+            static char name[MAX_NAME_LENGTH];
+            get_file_name(name, SCENE_FILE_PATH, true);
+            igText("SCENE: %s", name);
             igCheckbox("WITH_SHADOWS", &WITH_SHADOWS);
             igCheckbox("WITH_BLUR", &WITH_BLUR);
+            igDragInt3("CLEAR_COLOR", CLEAR_COLOR, 1, 0, 255, "%d", 0);
         }
 
         if (ig_collapsing_header("Camera", true)) {
@@ -549,8 +559,9 @@ static void draw_imgui(void) {
                 (ImVec4){1.0, 1.0, 1.0, 1.0}
             );
 
-            if (is_clicked)
+            if (is_clicked) {
                 load_sprite("resources/items/sprites", item->name, 0, &item->texture, 0);
+            }
 
             igSameLine(0.0, 5.0);
             igBeginGroup();
@@ -598,13 +609,17 @@ static void draw_imgui(void) {
             igSeparatorText("Trees");
             if (f->n_trees < MAX_N_FOREST_TREES
                 && igButton("New tree", (ImVec2){0.0, 0.0})) {
-                Tree *tree = &f->trees[f->n_trees++];
-                load_sprite(
+                Tree *tree = &f->trees[f->n_trees];
+                f->n_trees += load_sprite(
                     "resources/trees/sprites",
                     tree->name,
                     &tree->transform,
                     &tree->texture,
                     &tree->mesh
+                );
+                tree->transform.rotation = QuaternionMultiply(
+                    tree->transform.rotation,
+                    QuaternionFromEuler(DEG2RAD * 90.0, 0.0, 0.0)
                 );
             }
             for (size_t i = 0; i < f->n_trees; ++i) {
@@ -629,7 +644,7 @@ static void draw_imgui(void) {
                     (ImVec4){1.0, 1.0, 1.0, 1.0}
                 );
 
-                if (is_clicked)
+                if (is_clicked) {
                     load_sprite(
                         "resources/trees/sprites",
                         tree->name,
@@ -637,6 +652,7 @@ static void draw_imgui(void) {
                         &tree->texture,
                         &tree->mesh
                     );
+                }
                 igSameLine(0, 3);
 
                 igBeginGroup();
@@ -670,17 +686,10 @@ static void draw_imgui(void) {
         }
     }
     igEnd();
-
-    ig_fix_window_bot_left();
-    if (igBegin("Debug info", NULL, GHOST_WINDOW_FLAGS)) {
-        igText("Scene: %s", SCENE_FILE_PATH);
-    }
-    igEnd();
-
     end_imgui();
 }
 
-static void load_sprite(
+static bool load_sprite(
     const char *search_path,
     char *dst_name,
     Transform *dst_transform,
@@ -701,5 +710,8 @@ static void load_sprite(
         if (dst_transform) {
             *dst_transform = get_default_transform();
         }
+        return true;
     }
+
+    return false;
 }

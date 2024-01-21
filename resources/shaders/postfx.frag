@@ -13,5 +13,6 @@ void main() {
         tex_color = texture(texture0, uv);
     }
 
+    tex_color.a = 1.0;
     finalColor = tex_color;
 }

@@ -286,11 +286,31 @@ static void draw_items(bool with_borders) {
 }
 
 void draw_scene(bool with_shadows) {
-    draw_scene_ex(SCREEN, BLACK, SCENE.camera, with_shadows);
+    draw_scene_ex(SCREEN, BLACK, SCENE.camera, with_shadows, true);
+}
+
+static int compare_trees(const void *a, const void *b) {
+    const Tree *tree1 = (const Tree *)a;
+    const Tree *tree2 = (const Tree *)b;
+
+    float d1 = Vector3Distance(tree1->transform.translation, SCENE.camera.position);
+    float d2 = Vector3Distance(tree2->transform.translation, SCENE.camera.position);
+
+    if (d1 > d2) {
+        return -1;
+    } else if (d1 < d2) {
+        return 1;
+    } else {
+        return 0;
+    }
 }
 
 void draw_scene_ex(
-    RenderTexture2D screen, Color clear_color, Camera3D camera, bool with_shadows
+    RenderTexture2D screen,
+    Color clear_color,
+    Camera3D camera,
+    bool with_shadows,
+    bool sort_trees
 ) {
     Matrix light_vp;
     if (with_shadows) {
@@ -379,6 +399,9 @@ void draw_scene_ex(
     draw_mesh_m(eyes_background_mat, MATERIAL_DEFAULT, golova_mesh);
 
     // Forest
+    if (sort_trees) {
+        qsort(SCENE.forest.trees, SCENE.forest.n_trees, sizeof(Tree), compare_trees);
+    }
     for (size_t i = 0; i < SCENE.forest.n_trees; ++i) {
         Tree *tree = &SCENE.forest.trees[i];
         SCENE.forest.trees_material.maps[0].texture = tree->texture;
