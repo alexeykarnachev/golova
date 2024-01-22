@@ -98,6 +98,9 @@ typedef struct Board {
     Mesh item_mesh;
     int n_items;
     Item items[MAX_N_BOARD_ITEMS];
+
+    int n_hint_items;
+    Item hint_items[MAX_N_BOARD_ITEMS];
 } Board;
 
 typedef struct Tree {

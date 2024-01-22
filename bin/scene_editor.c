@@ -532,6 +532,35 @@ static void draw_imgui(void) {
         if (ig_collapsing_header("Board", true)) {
             Board *b = &SCENE.board;
             igInputText("Rule", b->rule, MAX_RULE_LENGTH, 0, 0, NULL);
+            igInputInt("N hint items", &SCENE.board.n_hint_items, 1, 1, 0);
+            for (int i = 0; i < SCENE.board.n_hint_items; ++i) {
+                if (i > 0) igSameLine(0, 5);
+                Item *item = &SCENE.board.hint_items[i];
+                Texture2D texture = item->texture;
+                int texture_id = texture.id;
+
+                igBeginGroup();
+                igText(item->name);
+                igPushID_Int(IG_ID++);
+                bool is_clicked = igImageButton(
+                    "",
+                    (ImTextureID)(long)texture_id,
+                    (ImVec2){64.0, 64.0},
+                    (ImVec2){0.0, 0.0},
+                    (ImVec2){1.0, 1.0},
+                    (ImVec4){0.0, 0.0, 0.0, 1.0},
+                    (ImVec4){1.0, 1.0, 1.0, 1.0}
+                );
+                igPopID();
+                igEndGroup();
+
+                if (is_clicked) {
+                    load_sprite(
+                        "resources/items/sprites", item->name, 0, &item->texture, 0
+                    );
+                }
+            }
+
             igDragFloat("Board scale", &b->board_scale, 0.01, 0.01, 1.0, "%.3f", 0);
             igDragFloat("Item Scale", &b->item_scale, 0.01, 0.01, 1.0, "%.3f", 0);
             igDragFloat("Item elevation", &b->item_elevation, 0.01, 0.01, 1.0, "%.3f", 0);

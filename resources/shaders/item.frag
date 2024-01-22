@@ -18,7 +18,11 @@ void main() {
         tex_color = texture(texture0, uv);
     }
 
-    if (tex_color.a < 0.01) discard;
+    if (tex_color.a < 0.01) {
+        discard;
+    } else if (tex_color.a > 0.1) {
+        tex_color.a = 1.0;
+    }
     finalColor = tex_color * colDiffuse; 
 }
 

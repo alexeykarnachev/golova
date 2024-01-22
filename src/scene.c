@@ -111,6 +111,7 @@ void load_scene(const char *file_path) {
     SCENE.board.item_elevation = 0.5;
     SCENE.board.board_scale = 0.7;
     SCENE.board.item_scale = 0.2;
+    SCENE.board.n_hint_items = 0;
 
     // Camera
     SCENE.camera.fovy = 60.0;
@@ -152,6 +153,7 @@ void load_scene(const char *file_path) {
         fread(&SCENE.board.item_scale, sizeof(float), 1, f);
         fread(&SCENE.board.item_elevation, sizeof(float), 1, f);
         fread(&SCENE.board.n_items, sizeof(int), 1, f);
+        fread(&SCENE.board.n_hint_items, sizeof(int), 1, f);
 
         // Forest
         fread(&SCENE.forest.name, sizeof(SCENE.forest.name), 1, f);
@@ -160,12 +162,25 @@ void load_scene(const char *file_path) {
             load_forest(&SCENE.forest, fp);
         }
 
+        // Items
         for (int i = 0; i < SCENE.board.n_items; ++i) {
             Item *item = &SCENE.board.items[i];
             fread_matrix(&item->matrix, f);
             fread(&item->is_correct, sizeof(bool), 1, f);
             fread(&item->name, sizeof(item->name), 1, f);
             item->state = ITEM_COLD;
+
+            if (item->name[0] != '\0') {
+                sprintf(fp, "resources/items/sprites/%s.png", item->name);
+                if (IsTextureReady(item->texture)) UnloadTexture(item->texture);
+                item->texture = LoadTexture(fp);
+            }
+        }
+
+        // Hint items
+        for (int i = 0; i < SCENE.board.n_hint_items; ++i) {
+            Item *item = &SCENE.board.hint_items[i];
+            fread(&item->name, sizeof(item->name), 1, f);
 
             if (item->name[0] != '\0') {
                 sprintf(fp, "resources/items/sprites/%s.png", item->name);
@@ -206,6 +221,7 @@ void save_scene(const char *file_path) {
     fwrite(&SCENE.board.item_scale, sizeof(float), 1, f);
     fwrite(&SCENE.board.item_elevation, sizeof(float), 1, f);
     fwrite(&SCENE.board.n_items, sizeof(int), 1, f);
+    fwrite(&SCENE.board.n_hint_items, sizeof(int), 1, f);
 
     // Forest
     fwrite(&SCENE.forest.name, sizeof(SCENE.forest.name), 1, f);
@@ -215,6 +231,12 @@ void save_scene(const char *file_path) {
         Item *item = &SCENE.board.items[i];
         fwrite_matrix(&item->matrix, f);
         fwrite(&item->is_correct, sizeof(bool), 1, f);
+        fwrite(&item->name, sizeof(item->name), 1, f);
+    }
+
+    // Hint items
+    for (int i = 0; i < SCENE.board.n_hint_items; ++i) {
+        Item *item = &SCENE.board.hint_items[i];
         fwrite(&item->name, sizeof(item->name), 1, f);
     }
 

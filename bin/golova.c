@@ -67,12 +67,14 @@ typedef struct Position {
      : (state == GAME_OVER)        ? "GAME_OVER" \
                                    : "UNKNOWN")
 
-static float GAME_STATE_TO_TIME[] = {100.0, 1.0, 0.0};
+static float GAME_STATE_TO_TIME[] = {2.0, 1.0, 0.0, 0.0};
 
 static char *SCENES_DIR = "resources/scenes";
 static int CURR_SCENE_ID;
 static char **SCENE_FILE_NAMES;
 static int N_SCENES;
+
+static Texture2D TEXTURE_QUESTION_MARK;
 
 static PauseState PAUSE_STATE;
 static PauseState NEXT_PAUSE_STATE;
@@ -92,6 +94,12 @@ static bool IS_ALTF4_PRESSED;
 static Ray MOUSE_RAY;
 
 static Item *PICKED_ITEM;
+
+static int N_DEAD_CORRECT_ITEMS;
+static Item *DEAD_CORRECT_ITEMS[MAX_N_BOARD_ITEMS];
+
+static int N_DEAD_WRONG_ITEMS;
+static Item *DEAD_WRONG_ITEMS[MAX_N_BOARD_ITEMS];
 
 static float EYES_TARGET_SHIFT;
 static float EYES_TARGET_UPLIFT;
@@ -115,6 +123,8 @@ int main(void) {
     InitWindow(SCREEN_WIDTH, SCREEN_HEIGHT, "Golova");
     init_core(SCREEN_WIDTH, SCREEN_HEIGHT);
     SCENE_FILE_NAMES = get_file_names_in_dir(SCENES_DIR, &N_SCENES);
+
+    TEXTURE_QUESTION_MARK = LoadTexture("resources/sprites/question.png");
 
 #ifdef DRAW_IMGUI
     load_imgui();
@@ -153,8 +163,14 @@ static void load_curr_scene(void) {
 
     load_scene(fp);
 
+    N_DEAD_CORRECT_ITEMS = 0;
+    N_DEAD_WRONG_ITEMS = 0;
     NEXT_GAME_STATE = PLAYER_IS_PICKING;
     TIME_REMAINING = GAME_STATE_TO_TIME[GAME_STATE];
+
+    for (int i = 0; i < SCENE.board.n_hint_items; ++i) {
+        DEAD_CORRECT_ITEMS[N_DEAD_CORRECT_ITEMS++] = &SCENE.board.hint_items[i];
+    }
 }
 
 static void update_game(void) {
@@ -394,8 +410,10 @@ static void update_game(void) {
         if (TIME_REMAINING <= 0.0) {
             PICKED_ITEM->state = ITEM_DEAD;
             if (PICKED_ITEM->is_correct) {
+                DEAD_CORRECT_ITEMS[N_DEAD_CORRECT_ITEMS++] = PICKED_ITEM;
                 SCENE.board.n_hits_required -= 1;
             } else {
+                DEAD_WRONG_ITEMS[N_DEAD_WRONG_ITEMS++] = PICKED_ITEM;
                 SCENE.board.n_misses_allowed -= 1;
             }
             PICKED_ITEM = NULL;
@@ -446,7 +464,6 @@ static void draw_ggui(void) {
         y += font_size + gap;
         IS_EXIT_GAME = ggui_button((Position){cx, y, CENTER_TOP}, quit_text, font_size);
     } else if (GAME_STATE == SCENE_OVER || GAME_STATE == GAME_OVER) {
-
         const char *text;
         Color color;
         Position pos;
@@ -473,6 +490,31 @@ static void draw_ggui(void) {
         } else if (GAME_STATE == GAME_OVER) {
             ggui_text(pos, "Game Over", font_size / 2, LIGHTGRAY);
         }
+    }
+
+    // -------------------------------------------------------------------
+    // Draw correctly picked items
+    int n_items = N_DEAD_CORRECT_ITEMS + SCENE.board.n_hits_required;
+    int item_size = 64;
+    int pad = 20;
+    int mid_x = screen_width / 2;
+    int x = mid_x - (item_size * n_items + pad * (n_items - 1)) / 2;
+
+    for (int i = 0; i < n_items; ++i) {
+        Texture texture;
+        Color color = WHITE;
+        if (i < N_DEAD_CORRECT_ITEMS) {
+            Item *item = DEAD_CORRECT_ITEMS[i];
+            texture = item->texture;
+        } else {
+            texture = TEXTURE_QUESTION_MARK;
+            color = PURPLE;
+        }
+        Rectangle src = {0.0, 0.0, texture.width, texture.height};
+        Rectangle dst = {x, pad, item_size, item_size};
+        DrawTexturePro(texture, src, dst, Vector2Zero(), 0.0, color);
+
+        x += pad + item_size;
     }
 }
 
