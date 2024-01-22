@@ -230,6 +230,8 @@ void save_scene(const char *file_path) {
 }
 
 void load_forest(Forest *forest, const char *file_path) {
+    static char fp[2048];
+
     for (size_t i = 0; i < forest->n_trees; ++i) {
         Tree *tree = &forest->trees[i];
         UnloadTexture(tree->texture);
@@ -238,13 +240,12 @@ void load_forest(Forest *forest, const char *file_path) {
 
     FILE *f = fopen(file_path, "rb");
     fread(&forest->name, sizeof(forest->name), 1, f);
-    fread(&forest->n_trees, sizeof(size_t), 1, f);
+    fread(&forest->n_trees, sizeof(forest->n_trees), 1, f);
     for (size_t i = 0; i < forest->n_trees; ++i) {
         Tree *tree = &forest->trees[i];
         fread(&tree->name, sizeof(tree->name), 1, f);
         fread_transform(&tree->transform, f);
 
-        static char fp[2048];
         sprintf(fp, "resources/trees/sprites/%s.png", tree->name);
         tree->texture = LoadTexture(fp);
         tree->mesh = GenMeshPlane(
@@ -252,17 +253,21 @@ void load_forest(Forest *forest, const char *file_path) {
         );
         tree->matrix = MatrixIdentity();
     }
+
+    fclose(f);
 }
 
 void save_forest(Forest *forest, const char *file_path) {
     FILE *f = fopen(file_path, "wb");
     fwrite(&forest->name, sizeof(forest->name), 1, f);
-    fwrite(&forest->n_trees, sizeof(size_t), 1, f);
+    fwrite(&forest->n_trees, sizeof(forest->n_trees), 1, f);
     for (size_t i = 0; i < forest->n_trees; ++i) {
         Tree *tree = &forest->trees[i];
         fwrite(&tree->name, sizeof(tree->name), 1, f);
         fwrite_transform(&tree->transform, f);
     }
+
+    fclose(f);
 }
 
 static void draw_items(bool with_borders) {

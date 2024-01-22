@@ -86,7 +86,7 @@ all: \
 
 $(BIN_NAMES): %: $(BIN_DIR)/%.o $(PROJ_OBJS); \
 	mkdir -p $(BUILD_DIR);
-	$(CC) -o $(BUILD_DIR)/$@$ $^ -Wl,-rpath=$(LIB_DIR) $(LDFLAGS)
+	$(CC) -o $(BUILD_DIR)/$@ $^ -Wl,-rpath=$(LIB_DIR) $(LDFLAGS)
 
 %.o: %.c; \
 	$(CC) $(CFLAGS) $(INCLUDE_PATHS) -c -o $@ $<

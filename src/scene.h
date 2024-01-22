@@ -112,7 +112,7 @@ typedef struct Tree {
 #define MAX_N_FOREST_TREES 64
 typedef struct Forest {
     char name[MAX_NAME_LENGTH];
-    size_t n_trees;
+    int n_trees;
     Tree trees[MAX_N_FOREST_TREES];
 
     Material trees_material;
