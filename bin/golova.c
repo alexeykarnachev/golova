@@ -67,7 +67,7 @@ typedef struct Position {
      : (state == GAME_OVER)        ? "GAME_OVER" \
                                    : "UNKNOWN")
 
-static float GAME_STATE_TO_TIME[] = {2.0, 1.0, 0.0, 0.0};
+static float GAME_STATE_TO_TIME[] = {10.0, 1.0, 0.0, 0.0};
 
 static char *SCENES_DIR = "resources/scenes";
 static int CURR_SCENE_ID;

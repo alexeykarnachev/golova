@@ -19,6 +19,7 @@ Scene SCENE;
 RenderTexture2D SHADOWMAP;
 RenderTexture2D SCREEN;
 Material MATERIAL_DEFAULT;
+Material MATERIAL_SKY;
 Mesh PLANE_MESH;
 Shader POSTFX_SHADER;
 
@@ -32,10 +33,14 @@ static Shader load_shader(const char *vs_file_name, const char *fs_file_name);
 
 void init_core(int screen_width, int screen_height) {
     MATERIAL_DEFAULT = LoadMaterialDefault();
+    PLANE_MESH = GenMeshPlane(1.0, 1.0, 2, 2);
     SHADOWMAP = LoadRenderTexture(SHADOWMAP_WIDTH, SHADOWMAP_HEIGHT);
     SetTextureWrap(SHADOWMAP.texture, TEXTURE_WRAP_CLAMP);
     SCREEN = LoadRenderTexture(screen_width, screen_height);
     POSTFX_SHADER = load_shader(0, "postfx.frag");
+
+    MATERIAL_SKY = LoadMaterialDefault();
+    MATERIAL_SKY.shader = load_shader(0, "sky.frag");
 
     // -------------------------------------------------------------------
     // Load resources
@@ -361,6 +366,27 @@ void draw_scene_ex(
     // Draw scene
     BeginTextureMode(screen);
     ClearBackground(clear_color);
+
+    // Sky
+    BeginShaderMode(MATERIAL_SKY.shader);
+    float screen_size[2] = {GetScreenWidth(), GetScreenHeight()};
+    float time = GetTime();
+    SetShaderValueV(
+        MATERIAL_SKY.shader,
+        GetShaderLocation(MATERIAL_SKY.shader, "u_screen_size"),
+        screen_size,
+        SHADER_UNIFORM_VEC2,
+        1
+    );
+    SetShaderValue(
+        MATERIAL_SKY.shader,
+        GetShaderLocation(MATERIAL_SKY.shader, "u_time"),
+        &time,
+        SHADER_UNIFORM_FLOAT
+    );
+    DrawRectangle(0, 0, screen_size[0], screen_size[1], BLACK);
+    EndShaderMode();
+
     BeginMode3D(camera);
 
     // Golova
