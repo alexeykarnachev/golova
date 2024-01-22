@@ -100,6 +100,9 @@ static bool load_sprite(
 );
 
 int main(void) {
+    InitWindow(SCREEN_WIDTH, SCREEN_HEIGHT, "Editor");
+    SetTargetFPS(60);
+
     init_core(SCREEN_WIDTH, SCREEN_HEIGHT);
     load_scene(NULL);
     load_imgui();

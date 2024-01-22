@@ -1,7 +1,6 @@
 .PHONY: all clean
 
-
-PLATFORM ?= PLATFORM_DESKTOP
+PLATFORM = PLATFORM_DESKTOP
 BUILD_MODE ?= RELEASE
 
 THIS_DIR = $(shell pwd)
@@ -14,52 +13,32 @@ LIB_DIR = $(THIS_DIR)/lib/$(PLATFORM)
 
 PROJ_SRCS = $(shell find $(SRC_DIR) -type f -name '*.c')
 PROJ_OBJS = $(patsubst %.c,%.o,$(PROJ_SRCS))
-BIN_NAMES = golova
-ifeq ($(PLATFORM),PLATFORM_DESKTOP)
-	BIN_NAMES += scene_editor
-endif
+BIN_NAMES = golova scene_editor
 
 # ------------------------------------------------------------------------
 # Define compiler: CC
 CC = gcc
-ifeq ($(PLATFORM),PLATFORM_WEB)
-	CC = emcc
-endif
+LDFLAGS =
+CFLAGS =
 
 # ------------------------------------------------------------------------
 # Define compiler flags: CFLAGS
-CFLAGS = -Wall -std=c99 -D_DEFAULT_SOURCE -Wno-missing-braces
+CFLAGS += -Wall -std=c99 -D_DEFAULT_SOURCE -Wno-missing-braces
 
 ifeq ($(BUILD_MODE),DEBUG)
-    CFLAGS += -g -D_DEBUG
-    ifeq ($(PLATFORM),PLATFORM_WEB)
-        CFLAGS += -s ASSERTIONS=1 --profiling
-    endif
+    CFLAGS += -fsanitize=address -g
+	LDFLAGS += -fsanitize=address -g
 else
-    ifeq ($(PLATFORM),PLATFORM_WEB)
-		CFLAGS += -Os
-    else
-        CFLAGS += -s -O2
-    endif
+	CFLAGS += -s -O2
 endif
 
 # ------------------------------------------------------------------------
 # Define library paths containing required libs: LDFLAGS
-LDFLAGS = -L$(LIB_DIR)
-
-ifeq ($(PLATFORM),PLATFORM_WEB)
-	LDFLAGS += \
-		-s USE_GLFW=3 -s USE_GLFW=3 -s ASYNCIFY -s EXPORTED_RUNTIME_METHODS=ccall \
-		--shell-file $(RAYLIB_SRC_DIR)/minshell.html
-	EXT = .html
-endif
-
-ifeq ($(PLATFORM),PLATFORM_DESKTOP)
-	LDFLAGS += -lraylib -lcimgui -lnfd \
-		$(shell pkg-config --libs gtk+-3.0)
-endif
-
-LDFLAGS += -lm -lpthread -ldl -lGL -lstdc++
+LDFLAGS += \
+	-L$(LIB_DIR) \
+	-lraylib -lcimgui -lnfd \
+	$(shell pkg-config --libs gtk+-3.0) \
+	-lm -lpthread -ldl -lGL -lstdc++
 
 # ------------------------------------------------------------------------
 # Define include paths for required headers: INCLUDE_PATHS
@@ -106,7 +85,8 @@ all: \
 	rm -f $(BIN_DIR)/*.o;
 
 $(BIN_NAMES): %: $(BIN_DIR)/%.o $(PROJ_OBJS); \
-	$(CC) -o $(BUILD_DIR)/$@$(EXT) $^ -Wl,-rpath=$(LIB_DIR) $(LDFLAGS)
+	mkdir -p $(BUILD_DIR);
+	$(CC) -o $(BUILD_DIR)/$@$ $^ -Wl,-rpath=$(LIB_DIR) $(LDFLAGS)
 
 %.o: %.c; \
 	$(CC) $(CFLAGS) $(INCLUDE_PATHS) -c -o $@ $<

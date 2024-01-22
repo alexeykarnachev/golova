@@ -15,9 +15,9 @@
 #define SHADOWMAP_HEIGHT 768
 
 #if defined(PLATFORM_WEB)
-    #define GLSL_VERSION "100"
+#define GLSL_VERSION "100"
 #else
-    #define GLSL_VERSION "330"
+#define GLSL_VERSION "330"
 #endif
 
 Scene SCENE;
@@ -27,6 +27,11 @@ RenderTexture2D SCREEN;
 Material MATERIAL_DEFAULT;
 Mesh PLANE_MESH;
 Shader POSTFX_SHADER;
+
+static void fwrite_transform(Transform *transform, FILE *f);
+static void fread_transform(Transform *transform, FILE *f);
+static void fwrite_matrix(Matrix *matrix, FILE *f);
+static void fread_matrix(Matrix *matrix, FILE *f);
 
 static char *load_shader_src(const char *file_name);
 static Shader load_shader(const char *vs_name, const char *fs_name);
@@ -138,14 +143,14 @@ void load_scene(const char *file_path) {
         fread(&SCENE.light_camera, sizeof(Camera3D), 1, f);
 
         // Golova
-        fread(&SCENE.golova.transform, sizeof(Transform), 1, f);
+        fread_transform(&SCENE.golova.transform, f);
         fread(&SCENE.golova.eyes_idle_scale, sizeof(float), 1, f);
         fread(&SCENE.golova.eyes_idle_uplift, sizeof(float), 1, f);
         fread(&SCENE.golova.eyes_idle_shift, sizeof(float), 1, f);
         fread(&SCENE.golova.eyes_idle_spread, sizeof(float), 1, f);
 
         // Board
-        fread(&SCENE.board.transform, sizeof(Transform), 1, f);
+        fread_transform(&SCENE.board.transform, f);
         fread(&SCENE.board.rule, sizeof(SCENE.board.rule), 1, f);
         fread(&SCENE.board.n_misses_allowed, sizeof(int), 1, f);
         fread(&SCENE.board.n_hits_required, sizeof(int), 1, f);
@@ -163,7 +168,7 @@ void load_scene(const char *file_path) {
 
         for (size_t i = 0; i < SCENE.board.n_items; ++i) {
             Item *item = &SCENE.board.items[i];
-            fread(&item->matrix, sizeof(Matrix), 1, f);
+            fread_matrix(&item->matrix, f);
             fread(&item->is_correct, sizeof(bool), 1, f);
             fread(&item->name, sizeof(item->name), 1, f);
             item->state = ITEM_COLD;
@@ -192,14 +197,14 @@ void save_scene(const char *file_path) {
     fwrite(&SCENE.light_camera, sizeof(Camera3D), 1, f);
 
     // Golova
-    fwrite(&SCENE.golova.transform, sizeof(Transform), 1, f);
+    fwrite_transform(&SCENE.golova.transform, f);
     fwrite(&SCENE.golova.eyes_idle_scale, sizeof(float), 1, f);
     fwrite(&SCENE.golova.eyes_idle_uplift, sizeof(float), 1, f);
     fwrite(&SCENE.golova.eyes_idle_shift, sizeof(float), 1, f);
     fwrite(&SCENE.golova.eyes_idle_spread, sizeof(float), 1, f);
 
     // Board
-    fwrite(&SCENE.board.transform, sizeof(Transform), 1, f);
+    fwrite_transform(&SCENE.board.transform, f);
     fwrite(&SCENE.board.rule, sizeof(SCENE.board.rule), 1, f);
     fwrite(&SCENE.board.n_misses_allowed, sizeof(int), 1, f);
     fwrite(&SCENE.board.n_hits_required, sizeof(int), 1, f);
@@ -214,7 +219,7 @@ void save_scene(const char *file_path) {
     // Items
     for (size_t i = 0; i < SCENE.board.n_items; ++i) {
         Item *item = &SCENE.board.items[i];
-        fwrite(&item->matrix, sizeof(Matrix), 1, f);
+        fwrite_matrix(&item->matrix, f);
         fwrite(&item->is_correct, sizeof(bool), 1, f);
         fwrite(&item->name, sizeof(item->name), 1, f);
     }
@@ -237,7 +242,7 @@ void load_forest(Forest *forest, const char *file_path) {
     for (size_t i = 0; i < forest->n_trees; ++i) {
         Tree *tree = &forest->trees[i];
         fread(&tree->name, sizeof(tree->name), 1, f);
-        fread(&tree->transform, sizeof(Transform), 1, f);
+        fread_transform(&tree->transform, f);
 
         static char fp[2048];
         sprintf(fp, "resources/trees/sprites/%s.png", tree->name);
@@ -256,7 +261,7 @@ void save_forest(Forest *forest, const char *file_path) {
     for (size_t i = 0; i < forest->n_trees; ++i) {
         Tree *tree = &forest->trees[i];
         fwrite(&tree->name, sizeof(tree->name), 1, f);
-        fwrite(&tree->transform, sizeof(Transform), 1, f);
+        fwrite_transform(&tree->transform, f);
     }
 }
 
@@ -445,8 +450,12 @@ void draw_postfx(bool with_blur) {
 
 static char *load_shader_src(const char *file_name) {
     const char *version = TextFormat("#version %s", GLSL_VERSION);
-    char *common = LoadFileText(TextFormat("resources/shaders/%s/common.glsl", GLSL_VERSION));
-    char *text = LoadFileText(TextFormat("resources/shaders/%s/%s", GLSL_VERSION, file_name));
+    char *common = LoadFileText(
+        TextFormat("resources/shaders/%s/common.glsl", GLSL_VERSION)
+    );
+    char *text = LoadFileText(
+        TextFormat("resources/shaders/%s/%s", GLSL_VERSION, file_name)
+    );
 
     char *src = malloc(strlen(version) + strlen(common) + strlen(text) + 6);
 
@@ -478,4 +487,59 @@ static Shader load_shader(const char *vs_file_path, const char *fs_file_path) {
     if (vs) free(vs);
     if (fs) free(fs);
     return shader;
+}
+
+static void fwrite_transform(Transform *transform, FILE *f) {
+    fwrite(&transform->translation.x, sizeof(float), 1, f);
+    fwrite(&transform->translation.y, sizeof(float), 1, f);
+    fwrite(&transform->translation.z, sizeof(float), 1, f);
+
+    fwrite(&transform->scale.x, sizeof(float), 1, f);
+    fwrite(&transform->scale.y, sizeof(float), 1, f);
+    fwrite(&transform->scale.z, sizeof(float), 1, f);
+
+    fwrite(&transform->rotation.x, sizeof(float), 1, f);
+    fwrite(&transform->rotation.y, sizeof(float), 1, f);
+    fwrite(&transform->rotation.z, sizeof(float), 1, f);
+    fwrite(&transform->rotation.w, sizeof(float), 1, f);
+}
+
+static void fread_transform(Transform *transform, FILE *f) {
+    fread(&transform->translation.x, sizeof(float), 1, f);
+    fread(&transform->translation.y, sizeof(float), 1, f);
+    fread(&transform->translation.z, sizeof(float), 1, f);
+
+    fread(&transform->scale.x, sizeof(float), 1, f);
+    fread(&transform->scale.y, sizeof(float), 1, f);
+    fread(&transform->scale.z, sizeof(float), 1, f);
+
+    fread(&transform->rotation.x, sizeof(float), 1, f);
+    fread(&transform->rotation.y, sizeof(float), 1, f);
+    fread(&transform->rotation.z, sizeof(float), 1, f);
+    fread(&transform->rotation.w, sizeof(float), 1, f);
+}
+
+static void fwrite_matrix(Matrix *matrix, FILE *f) {
+    fwrite(MatrixToFloat(*matrix), sizeof(float), 16, f);
+}
+
+static void fread_matrix(Matrix *matrix, FILE *f) {
+    float values[16];
+    fread(values, sizeof(float), 16, f);
+    matrix->m0 = values[0];
+    matrix->m1 = values[1];
+    matrix->m2 = values[2];
+    matrix->m3 = values[3];
+    matrix->m4 = values[4];
+    matrix->m5 = values[5];
+    matrix->m6 = values[6];
+    matrix->m7 = values[7];
+    matrix->m8 = values[8];
+    matrix->m9 = values[9];
+    matrix->m10 = values[10];
+    matrix->m11 = values[11];
+    matrix->m12 = values[12];
+    matrix->m13 = values[13];
+    matrix->m14 = values[14];
+    matrix->m15 = values[15];
 }

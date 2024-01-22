@@ -1,15 +1,50 @@
 .PHONY: all clean
 
+PLATFORM = PLATFORM_WEB
+BUILD_MODE ?= RELEASE
+HEAP_SIZE  ?= 134217728
+
 THIS_DIR=$(shell pwd)
 BIN_DIR=$(THIS_DIR)/bin
 SRC_DIR=$(THIS_DIR)/src
 DEPS_DIR=$(THIS_DIR)/deps
 INCLUDE_DIR=$(THIS_DIR)/include
-LIB_DIR=$(THIS_DIR)/lib
+BUILD_DIR = $(THIS_DIR)/build/$(PLATFORM)
+LIB_DIR = $(THIS_DIR)/lib/$(PLATFORM)
 
 PROJ_SRCS = $(shell find $(SRC_DIR) -type f -name '*.c')
-PROJ_OBJS = $(patsubst %.c,%.o,$(PROJ_SRCS))
 BIN_NAMES = golova
+
+# ------------------------------------------------------------------------
+# Define compiler: CC
+CC = emcc
+LDFLAGS =
+CFLAGS =
+
+# ------------------------------------------------------------------------
+# Define compiler flags: CFLAGS
+CFLAGS += -Wall -std=c99 -D_DEFAULT_SOURCE -Wno-missing-braces
+
+ifeq ($(BUILD_MODE),DEBUG)
+	CFLAGS += -s ASSERTIONS=1 --profiling
+else
+	CFLAGS += -Os
+endif
+
+# ------------------------------------------------------------------------
+# Define library paths containing required libs: LDFLAGS
+LDFLAGS += \
+	-L$(LIB_DIR) \
+	-lm -lpthread -ldl -lGL -lstdc++ \
+	--shell-file $(RAYLIB_SRC_DIR)/minshell.html \
+	-s USE_GLFW=3 -s TOTAL_MEMORY=$(HEAP_SIZE) -s FORCE_FILESYSTEM=1 \
+	--preload-file ./resources \
+	$(LIB_DIR)/libraylib.a
+
+
+# ------------------------------------------------------------------------
+# Define include paths for required headers: INCLUDE_PATHS
+INCLUDE_PATHS = -I$(INCLUDE_DIR)
 
 # ------------------------------------------------------------------------
 # Raylib
@@ -19,24 +54,18 @@ RAYLIB_NAME=raylib-$(RAYLIB_VERSION)
 RAYLIB_DIR=$(DEPS_DIR)/$(RAYLIB_NAME)
 RAYLIB_ARCHIVE_PATH=$(DEPS_DIR)/$(RAYLIB_NAME).tar.gz
 RAYLIB_SRC_DIR=$(RAYLIB_DIR)/src
-RAYLIB_PLATFORM=PLATFORM_WEB
 
 # ------------------------------------------------------------------------
 # Project
-CC=emcc
-CFLAGS=-Wall -Wno-missing-braces -Wunused-result -I./include -std=c99 -D_DEFAULT_SOURCE
-LDFLAGS=-L. -L./lib -L$(RAYLIB_PATH)/src -s USE_GLFW=3 -s ASYNCIFY -s EXPORTED_RUNTIME_METHODS=ccall --shell-file $(RAYLIB_SRC_DIR)/minshell.html ./lib/libraylib.a
-EXT=.html
-
-bin/golova: bin/golova.c
-	$(CC) -o $@$(EXT) $< $(CFLAGS) $(LDFLAGS) -D$(RAYLIB_PLATFORM) $(PROJ_SRCS) \
+golova: bin/golova.c
+	$(CC) -o $(BUILD_DIR)/$@.html $< $(CFLAGS) $(INCLUDE_PATHS) $(LDFLAGS) -D$(PLATFORM) $(PROJ_SRCS) \
 	-s TOTAL_MEMORY=67108864 \
 	--preload-file resources
 
 # ------------------------------------------------------------------------
 # Dependencies
 create_dirs:
-	mkdir -p $(DEPS_DIR) $(INCLUDE_DIR) $(LIB_DIR);
+	mkdir -p $(DEPS_DIR) $(INCLUDE_DIR) $(LIB_DIR) $(BUILD_DIR);
 
 download_raylib:
 	if [ ! -d $(RAYLIB_DIR) ]; then \
@@ -46,7 +75,7 @@ download_raylib:
 
 install_raylib:
 	cd $(RAYLIB_SRC_DIR) \
-	&& make PLATFORM=$(RAYLIB_PLATFORM) \
+	&& make PLATFORM=$(PLATFORM) \
 	&& sudo make install \
 		RAYLIB_INSTALL_PATH=$(LIB_DIR) \
 		RAYLIB_H_INSTALL_PATH=$(INCLUDE_DIR) \

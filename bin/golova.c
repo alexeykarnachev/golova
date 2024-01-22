@@ -8,7 +8,7 @@
 #include <stdio.h>
 
 #if defined(PLATFORM_WEB)
-    #include <emscripten/emscripten.h>
+#include <emscripten/emscripten.h>
 #endif
 
 // #include "../src/cimgui_utils.h"
@@ -156,7 +156,6 @@ static void update_game(void) {
     IS_LMB_PRESSED = IsMouseButtonPressed(MOUSE_BUTTON_LEFT);
     IS_ALTF4_PRESSED = IsKeyDown(KEY_LEFT_ALT) && IsKeyPressed(KEY_F4);
     MOUSE_RAY = GetMouseRay(MOUSE_POSITION, SCENE.camera);
-
 
 #if !defined(PLATFORM_WEB)
     if ((WindowShouldClose() || IS_ALTF4_PRESSED) && !IS_ESCAPE_PRESSED) {
@@ -515,7 +514,7 @@ static void ggui_text(Position pos, const char *text, int font_size, Color color
 //         igText("rule: %s", SCENE.board.rule);
 //         igText("n_hits_required: %d", SCENE.board.n_hits_required);
 //         igText("n_misses_allowed: %d", SCENE.board.n_misses_allowed);
-// 
+//
 //         const char *picked_item_name = "";
 //         const char *picked_item_state = "";
 //         if (PICKED_ITEM) {
