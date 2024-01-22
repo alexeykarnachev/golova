@@ -1,6 +1,8 @@
 in vec2 fragTexCoord;
+
 uniform sampler2D texture0;
 uniform int u_with_blur;
+
 out vec4 finalColor;
 
 void main() {

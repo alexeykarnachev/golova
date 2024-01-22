@@ -37,7 +37,7 @@ LDFLAGS += \
 	-L$(LIB_DIR) \
 	-lm -lpthread -ldl -lGL -lstdc++ \
 	--shell-file $(RAYLIB_SRC_DIR)/minshell.html \
-	-s USE_GLFW=3 -s TOTAL_MEMORY=$(HEAP_SIZE) -s FORCE_FILESYSTEM=1 \
+	-s WASM=1 -s MAX_WEBGL_VERSION=2 -s MIN_WEBGL_VERSION=2 -s USE_GLFW=3 -s TOTAL_MEMORY=$(HEAP_SIZE) -s FORCE_FILESYSTEM=1 \
 	--preload-file ./resources \
 	$(LIB_DIR)/libraylib.a
 

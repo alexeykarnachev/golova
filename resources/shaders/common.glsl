@@ -2,7 +2,7 @@ float offset[3] = float[](0.0, 1.38, 3.23);
 float weight[3] = float[](0.23, 0.32, 0.07);
 
 vec4 blur_texture(sampler2D tex, vec2 uv) {
-    ivec2 size = textureSize(tex, 0);
+    vec2 size = vec2(textureSize(tex, 0));
 
     vec4 color = texture(tex, uv) * weight[0];
 

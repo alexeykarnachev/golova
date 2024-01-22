@@ -14,12 +14,6 @@
 #define SHADOWMAP_WIDTH 1024
 #define SHADOWMAP_HEIGHT 768
 
-#if defined(PLATFORM_WEB)
-#define GLSL_VERSION "100"
-#else
-#define GLSL_VERSION "330"
-#endif
-
 Scene SCENE;
 
 RenderTexture2D SHADOWMAP;
@@ -34,7 +28,7 @@ static void fwrite_matrix(Matrix *matrix, FILE *f);
 static void fread_matrix(Matrix *matrix, FILE *f);
 
 static char *load_shader_src(const char *file_name);
-static Shader load_shader(const char *vs_name, const char *fs_name);
+static Shader load_shader(const char *vs_file_name, const char *fs_file_name);
 
 void init_core(int screen_width, int screen_height) {
     MATERIAL_DEFAULT = LoadMaterialDefault();
@@ -454,13 +448,17 @@ void draw_postfx(bool with_blur) {
 }
 
 static char *load_shader_src(const char *file_name) {
-    const char *version = TextFormat("#version %s", GLSL_VERSION);
-    char *common = LoadFileText(
-        TextFormat("resources/shaders/%s/common.glsl", GLSL_VERSION)
-    );
-    char *text = LoadFileText(
-        TextFormat("resources/shaders/%s/%s", GLSL_VERSION, file_name)
-    );
+
+    const char *version;
+
+#if defined(PLATFORM_WEB)
+    version = "#version 300 es\n\nprecision highp float;";
+#else
+    version = "#version 460 core";
+#endif
+
+    char *common = LoadFileText("resources/shaders/common.glsl");
+    char *text = LoadFileText(TextFormat("resources/shaders/%s", file_name));
 
     char *src = malloc(strlen(version) + strlen(common) + strlen(text) + 6);
 
@@ -481,12 +479,17 @@ static char *load_shader_src(const char *file_name) {
     return src;
 }
 
-static Shader load_shader(const char *vs_file_path, const char *fs_file_path) {
+static Shader load_shader(const char *vs_file_name, const char *fs_file_name) {
     char *vs = NULL;
     char *fs = NULL;
 
-    if (vs_file_path) vs = load_shader_src(vs_file_path);
-    if (fs_file_path) fs = load_shader_src(fs_file_path);
+    if (vs_file_name) {
+        vs = load_shader_src(vs_file_name);
+    } else {
+        vs = load_shader_src("base.vert");
+    }
+
+    if (fs_file_name) fs = load_shader_src(fs_file_name);
     Shader shader = LoadShaderFromMemory(vs, fs);
 
     if (vs) free(vs);
