@@ -24,6 +24,7 @@ CFLAGS =
 # ------------------------------------------------------------------------
 # Define compiler flags: CFLAGS
 CFLAGS += -Wall -std=c99 -D_DEFAULT_SOURCE -Wno-missing-braces
+CFLAGS += -D$(PLATFORM) -D$(BUILD_MODE)
 
 ifeq ($(BUILD_MODE),DEBUG)
     CFLAGS += -fsanitize=address -g

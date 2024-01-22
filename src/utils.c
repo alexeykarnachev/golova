@@ -94,9 +94,9 @@ void get_file_name(char *dst, const char *path, bool strip_ext) {
     const char *file_extension_start = strrchr(file_name_start, '.');
 
     // Calculate the length of the file name (excluding extension if needed)
-    size_t file_name_length = (file_extension_start && strip_ext)
-                                  ? (size_t)(file_extension_start - file_name_start)
-                                  : strlen(file_name_start);
+    int file_name_length = (file_extension_start && strip_ext)
+                               ? (int)(file_extension_start - file_name_start)
+                               : strlen(file_name_start);
 
     // Copy the file name into the provided result buffer
     strncpy(dst, file_name_start, file_name_length);

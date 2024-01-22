@@ -166,7 +166,7 @@ void load_scene(const char *file_path) {
             load_forest(&SCENE.forest, fp);
         }
 
-        for (size_t i = 0; i < SCENE.board.n_items; ++i) {
+        for (int i = 0; i < SCENE.board.n_items; ++i) {
             Item *item = &SCENE.board.items[i];
             fread_matrix(&item->matrix, f);
             fread(&item->is_correct, sizeof(bool), 1, f);
@@ -217,7 +217,7 @@ void save_scene(const char *file_path) {
     fwrite(&SCENE.forest.name, sizeof(SCENE.forest.name), 1, f);
 
     // Items
-    for (size_t i = 0; i < SCENE.board.n_items; ++i) {
+    for (int i = 0; i < SCENE.board.n_items; ++i) {
         Item *item = &SCENE.board.items[i];
         fwrite_matrix(&item->matrix, f);
         fwrite(&item->is_correct, sizeof(bool), 1, f);
@@ -232,7 +232,7 @@ void save_scene(const char *file_path) {
 void load_forest(Forest *forest, const char *file_path) {
     static char fp[2048];
 
-    for (size_t i = 0; i < forest->n_trees; ++i) {
+    for (int i = 0; i < forest->n_trees; ++i) {
         Tree *tree = &forest->trees[i];
         UnloadTexture(tree->texture);
         UnloadMesh(tree->mesh);
@@ -241,7 +241,7 @@ void load_forest(Forest *forest, const char *file_path) {
     FILE *f = fopen(file_path, "rb");
     fread(&forest->name, sizeof(forest->name), 1, f);
     fread(&forest->n_trees, sizeof(forest->n_trees), 1, f);
-    for (size_t i = 0; i < forest->n_trees; ++i) {
+    for (int i = 0; i < forest->n_trees; ++i) {
         Tree *tree = &forest->trees[i];
         fread(&tree->name, sizeof(tree->name), 1, f);
         fread_transform(&tree->transform, f);
@@ -261,7 +261,7 @@ void save_forest(Forest *forest, const char *file_path) {
     FILE *f = fopen(file_path, "wb");
     fwrite(&forest->name, sizeof(forest->name), 1, f);
     fwrite(&forest->n_trees, sizeof(forest->n_trees), 1, f);
-    for (size_t i = 0; i < forest->n_trees; ++i) {
+    for (int i = 0; i < forest->n_trees; ++i) {
         Tree *tree = &forest->trees[i];
         fwrite(&tree->name, sizeof(tree->name), 1, f);
         fwrite_transform(&tree->transform, f);
@@ -272,7 +272,7 @@ void save_forest(Forest *forest, const char *file_path) {
 
 static void draw_items(bool with_borders) {
     Shader shader = SCENE.board.item_material.shader;
-    for (size_t i = 0; i < SCENE.board.n_items; ++i) {
+    for (int i = 0; i < SCENE.board.n_items; ++i) {
         Item *item = &SCENE.board.items[i];
         if (item->state == ITEM_DEAD) continue;
 
@@ -404,7 +404,7 @@ void draw_scene_ex(
     if (sort_trees) {
         qsort(SCENE.forest.trees, SCENE.forest.n_trees, sizeof(Tree), compare_trees);
     }
-    for (size_t i = 0; i < SCENE.forest.n_trees; ++i) {
+    for (int i = 0; i < SCENE.forest.n_trees; ++i) {
         Tree *tree = &SCENE.forest.trees[i];
         SCENE.forest.trees_material.maps[0].texture = tree->texture;
         Matrix mat = MatrixMultiply(get_transform_matrix(tree->transform), tree->matrix);
@@ -464,7 +464,7 @@ static char *load_shader_src(const char *file_name) {
 
     char *src = malloc(strlen(version) + strlen(common) + strlen(text) + 6);
 
-    size_t p = 0;
+    int p = 0;
     strcpy(&src[p], version);
     p += strlen(version);
     src[p] = '\n';
