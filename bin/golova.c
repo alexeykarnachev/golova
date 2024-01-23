@@ -67,7 +67,7 @@ typedef struct Position {
      : (state == GAME_OVER)        ? "GAME_OVER" \
                                    : "UNKNOWN")
 
-static float GAME_STATE_TO_TIME[] = {10.0, 1.0, 0.0, 0.0};
+static float GAME_STATE_TO_TIME[] = {2.0, 3.0, 0.0, 0.0};
 
 static char *SCENES_DIR = "resources/scenes";
 static int CURR_SCENE_ID;
@@ -76,6 +76,7 @@ static int N_SCENES;
 
 static Texture2D TEXTURE_QUESTION_MARK;
 
+static float DEFAULT_CAMERA_FOVY;
 static PauseState PAUSE_STATE;
 static PauseState NEXT_PAUSE_STATE;
 static GameState GAME_STATE;
@@ -167,6 +168,7 @@ static void load_curr_scene(void) {
     N_DEAD_WRONG_ITEMS = 0;
     NEXT_GAME_STATE = PLAYER_IS_PICKING;
     TIME_REMAINING = GAME_STATE_TO_TIME[GAME_STATE];
+    DEFAULT_CAMERA_FOVY = SCENE.camera.fovy;
 
     for (int i = 0; i < SCENE.board.n_hint_items; ++i) {
         DEAD_CORRECT_ITEMS[N_DEAD_CORRECT_ITEMS++] = &SCENE.board.hint_items[i];
@@ -181,6 +183,10 @@ static void update_game(void) {
     IS_LMB_PRESSED = IsMouseButtonPressed(MOUSE_BUTTON_LEFT);
     IS_ALTF4_PRESSED = IsKeyDown(KEY_LEFT_ALT) && IsKeyPressed(KEY_F4);
     MOUSE_RAY = GetMouseRay(MOUSE_POSITION, SCENE.camera);
+
+    Matrix golova_mat = MatrixMultiply(
+        get_transform_matrix(SCENE.golova.transform), SCENE.golova.matrix
+    );
 
 #if !defined(PLATFORM_WEB)
     if ((WindowShouldClose() || IS_ALTF4_PRESSED) && !IS_ESCAPE_PRESSED) {
@@ -209,6 +215,17 @@ static void update_game(void) {
     IS_BLURED = PAUSE_STATE > 0 || GAME_STATE == SCENE_OVER || GAME_STATE == GAME_OVER;
 
     // -------------------------------------------------------------------
+    // Update camera
+    if (GAME_STATE == GOLOVA_IS_EATING) {
+        float end_time = GAME_STATE_TO_TIME[GOLOVA_IS_EATING];
+        float cur_time = end_time - TIME_REMAINING;
+        SCENE.camera.fovy = DEFAULT_CAMERA_FOVY - 5.0 * cur_time / end_time;
+    } else {
+        SCENE.camera.fovy += DT * 10.0;
+        SCENE.camera.fovy = MIN(DEFAULT_CAMERA_FOVY, SCENE.camera.fovy);
+    }
+
+    // -------------------------------------------------------------------
     // Update board items
     Board *b = &SCENE.board;
     Transform t = b->transform;
@@ -230,6 +247,8 @@ static void update_game(void) {
         rlPushMatrix();
         {
             rlMultMatrixf(board_matrix_f);
+
+            // Place item on the board
             rlScalef(b->board_scale, b->board_scale, b->board_scale);
             rlTranslatef(x, 0.0, z);
             rlScalef(b->item_scale, b->item_scale, b->item_scale);
@@ -240,7 +259,20 @@ static void update_game(void) {
             if (item->state == ITEM_DYING) rlRotatef(TIME * 360.0, 0.0, 0.0, 1.0);
 
             rlRotatef(90.0, 1.0, 0.0, 0.0);
-            item->matrix = rlGetMatrixTransform();
+
+            Matrix item_mat = rlGetMatrixTransform();
+            // Translate dying item into the mouth
+            if (item->state == ITEM_DYING) {
+                Vector3 mouth_pos = {
+                    golova_mat.m12, golova_mat.m13 - 0.2, golova_mat.m14};
+                Vector3 item_pos = {item_mat.m12, item_mat.m13, item_mat.m14};
+                Vector3 d = Vector3Scale(Vector3Subtract(mouth_pos, item_pos), 0.9);
+                float k = 1.0 - TIME_REMAINING / GAME_STATE_TO_TIME[GOLOVA_IS_EATING];
+                d = Vector3Scale(d, k);
+                item_mat = MatrixMultiply(item_mat, MatrixTranslate(d.x, d.y, d.z));
+            }
+
+            item->matrix = item_mat;
         }
         rlPopMatrix();
     }
