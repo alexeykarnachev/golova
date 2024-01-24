@@ -18,7 +18,7 @@ void main() {
     vec2 uv = fragTexCoord;
     vec3 color;
 
-    float r = 0.05;
+    float r = 0.1;
     float d;
     if (uv.x <= r && uv.y <= r) {
         d = distance(vec2(r, r), uv) / r;
@@ -40,8 +40,8 @@ void main() {
         d = 0.0;
     }
 
-    color = vec3(0.6, 0.4, 0.6) * (1.0 - d);
-    color *= (1.0 - shadow * 0.8);
-    finalColor = vec4(color, 1.0 - d);
+    color = vec3(1.0, 1.0, 1.0) * (1.0 - d);
+    color *= (1.0 - shadow * 0.2);
+    finalColor = vec4(color, 0.4);
 }
 
