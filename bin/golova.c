@@ -6,6 +6,7 @@
 #include "rlgl.h"
 #include <math.h>
 #include <stdio.h>
+#include <string.h>
 
 #if defined(PLATFORM_WEB)
 #include <emscripten/emscripten.h>
@@ -67,7 +68,7 @@ typedef struct Position {
      : (state == GAME_OVER)        ? "GAME_OVER" \
                                    : "UNKNOWN")
 
-static float GAME_STATE_TO_TIME[] = {2.0, 3.0, 0.0, 0.0};
+static float GAME_STATE_TO_TIME[] = {10.0, 3.0, 0.0, 0.0};
 
 static char *SCENES_DIR = "resources/scenes";
 static int CURR_SCENE_ID;
@@ -76,6 +77,11 @@ static int N_SCENES;
 
 static Texture2D TEXTURE_QUESTION_MARK;
 static Music SCENE_MUSIC;
+
+#define MAX_N_TOUCH_SOUNDS 8
+static int CURR_TOUCH_SOUND_ID;
+static int N_TOUCH_SOUNDS;
+static Sound TOUCH_SOUNDS[MAX_N_TOUCH_SOUNDS];
 
 static float DEFAULT_CAMERA_FOVY;
 static PauseState PAUSE_STATE;
@@ -111,6 +117,7 @@ static void main_update(void);
 static void update_game(void);
 static void draw_ggui(void);
 static void draw_imgui(void);
+static void play_touch_sound(void);
 
 static bool ggui_button(Position pos, const char *text, int font_size);
 static Rectangle ggui_get_rec(Position pos, int width, int height);
@@ -125,12 +132,26 @@ int main(void) {
     InitWindow(SCREEN_WIDTH, SCREEN_HEIGHT, "Golova");
     init_core(SCREEN_WIDTH, SCREEN_HEIGHT);
     SCENE_FILE_NAMES = get_file_names_in_dir(SCENES_DIR, &N_SCENES);
-
     TEXTURE_QUESTION_MARK = LoadTexture("resources/sprites/question.png");
 
+    // Init audio and play main theme
     InitAudioDevice();
     SCENE_MUSIC = LoadMusicStream("resources/audio/scene.mp3");
     PlayMusicStream(SCENE_MUSIC);
+
+    // Load touch sounds
+    int n_file_names;
+    char **file_names = get_file_names_in_dir("resources/audio", &n_file_names);
+    for (int i = 0; i < n_file_names; ++i) {
+        if (N_TOUCH_SOUNDS == MAX_N_TOUCH_SOUNDS) break;
+
+        char *file_name = file_names[i];
+        if (strncmp(file_name, "touch", 5) == 0) {
+            const char *file_path_parts[2] = {"resources/audio", file_name};
+            const char *file_path = TextJoin(file_path_parts, 2, "/");
+            TOUCH_SOUNDS[N_TOUCH_SOUNDS++] = LoadSound(file_path);
+        }
+    }
 
 #ifdef DRAW_IMGUI
     load_imgui();
@@ -396,6 +417,7 @@ static void update_game(void) {
                     PICKED_ITEM->state = ITEM_COLD;
                     PICKED_ITEM = item;
                     PICKED_ITEM->state = ITEM_ACTIVE;
+                    play_touch_sound();
                     // Unpick the item
                 } else if (PICKED_ITEM) {
                     PICKED_ITEM->state = ITEM_COLD;
@@ -404,6 +426,7 @@ static void update_game(void) {
                 } else {
                     PICKED_ITEM = item;
                     PICKED_ITEM->state = ITEM_ACTIVE;
+                    play_touch_sound();
                 }
             } else if (is_hit) {
                 // Heat up (or stay active) the item
@@ -433,6 +456,7 @@ static void update_game(void) {
             }
 
             PICKED_ITEM->state = ITEM_DYING;
+            PlaySound(PICKED_ITEM->sound);
         }
     } else if (GAME_STATE == GOLOVA_IS_EATING) {
         // Set up Golova state
@@ -613,6 +637,12 @@ static void update_value2(
         *curr_x += d.x;
         *curr_y += d.y;
     }
+}
+
+static void play_touch_sound(void) {
+    if (MAX_N_TOUCH_SOUNDS == 0) return;
+    PlaySound(TOUCH_SOUNDS[CURR_TOUCH_SOUND_ID++]);
+    if (CURR_TOUCH_SOUND_ID >= MAX_N_TOUCH_SOUNDS) CURR_TOUCH_SOUND_ID = 0;
 }
 
 #ifdef DRAW_IMGUI

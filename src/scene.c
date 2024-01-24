@@ -179,6 +179,10 @@ void load_scene(const char *file_path) {
                 sprintf(fp, "resources/items/sprites/%s.png", item->name);
                 if (IsTextureReady(item->texture)) UnloadTexture(item->texture);
                 item->texture = LoadTexture(fp);
+
+                sprintf(fp, "resources/items/audio/%s.mp3", item->name);
+                if (IsSoundReady(item->sound)) UnloadSound(item->sound);
+                item->sound = LoadSound(fp);
             }
         }
 

@@ -73,6 +73,7 @@ typedef enum ItemState {
 
 typedef struct Item {
     Texture2D texture;
+    Sound sound;
     Matrix matrix;
 
     bool is_correct;
