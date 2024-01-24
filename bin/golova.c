@@ -75,6 +75,7 @@ static char **SCENE_FILE_NAMES;
 static int N_SCENES;
 
 static Texture2D TEXTURE_QUESTION_MARK;
+static Music SCENE_MUSIC;
 
 static float DEFAULT_CAMERA_FOVY;
 static PauseState PAUSE_STATE;
@@ -127,6 +128,10 @@ int main(void) {
 
     TEXTURE_QUESTION_MARK = LoadTexture("resources/sprites/question.png");
 
+    InitAudioDevice();
+    SCENE_MUSIC = LoadMusicStream("resources/audio/scene.mp3");
+    PlayMusicStream(SCENE_MUSIC);
+
 #ifdef DRAW_IMGUI
     load_imgui();
 #endif
@@ -147,6 +152,7 @@ int main(void) {
 
 static void main_update(void) {
     update_game();
+    UpdateMusicStream(SCENE_MUSIC);
 
     draw_scene(true);
 
