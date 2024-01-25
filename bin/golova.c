@@ -655,8 +655,7 @@ static void draw_ggui(void) {
         int n_items = N_DEAD_CORRECT_ITEMS + SCENE.board.n_hits_required;
         int item_size = 64;
         int pad = 20;
-        int mid_x = screen_width / 2;
-        int x = mid_x - (item_size * n_items + pad * (n_items - 1)) / 2;
+        int x = pad;
 
         for (int i = 0; i < n_items; ++i) {
             Texture texture;
@@ -677,11 +676,11 @@ static void draw_ggui(void) {
 
         // ---------------------------------------------------------------
         // Draw current level number
+        int font_size = 30;
+        const char *text = TextFormat("Level %d", CURR_SCENE_ID + 1);
+        int w = MeasureText(text, font_size);
         ggui_text(
-            (Position){10, 10, LEFT_TOP},
-            TextFormat("Level %d", CURR_SCENE_ID + 1),
-            30,
-            WHITE
+            (Position){screen_width - w - 10, 10, LEFT_TOP}, text, font_size, WHITE
         );
     }
 
