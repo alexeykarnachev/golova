@@ -279,6 +279,10 @@ static void update_game(void) {
             rlScalef(b->board_scale, b->board_scale, b->board_scale);
             rlTranslatef(x, 0.0, z);
             rlScalef(b->item_scale, b->item_scale, b->item_scale);
+
+            // Make not cold items larger
+            if (item->state > ITEM_COLD) rlScalef(1.2, 1.2, 1.2);
+
             float elevation_offset = 0.05 * (sinf(2.0 * TIME) + 1.0);
             rlTranslatef(0.0, b->item_elevation + elevation_offset, 0.0);
 

@@ -20,7 +20,7 @@ void main() {
 
     if (tex_color.a < 0.01) {
         discard;
-    } else if (tex_color.a > 0.1) {
+    } else if (tex_color.a > 0.1 && !is_border) {
         tex_color.a = 1.0;
     }
     finalColor = tex_color * colDiffuse; 
