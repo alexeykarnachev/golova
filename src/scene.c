@@ -305,8 +305,8 @@ static void draw_items(bool with_borders) {
         Vector4 color = {0.0};
 
         if (with_borders) {
-            if (item->state == ITEM_HOT) color = (Vector4){1.0, 1.0, 0.0, 0.4};
-            else if (item->state == ITEM_ACTIVE) color = (Vector4){1.0, 1.0, 0.0, 1.0};
+            if (item->state == ITEM_HOT) color = (Vector4){1.0, 0.0, 1.0, 0.4};
+            else if (item->state == ITEM_ACTIVE) color = (Vector4){1.0, 0.0, 1.0, 1.0};
         }
 
         SetShaderValueV(
@@ -347,7 +347,7 @@ void draw_scene(
     bool sort_trees
 ) {
     Matrix light_vp;
-    if (with_shadows) {
+    if (with_shadows && with_items) {
         BeginTextureMode(SHADOWMAP);
         rlDisableBackfaceCulling();
 

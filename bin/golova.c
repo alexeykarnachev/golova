@@ -30,10 +30,11 @@
 #define EYES_SPEED 0.08
 
 typedef enum GameState {
-    PLAYER_IS_PICKING = 0,
-    GOLOVA_IS_EATING = 1,
-    SCENE_OVER = 2,
-    GAME_OVER = 3,
+    INTRO = 0,
+    PLAYER_IS_PICKING,
+    GOLOVA_IS_EATING,
+    SCENE_OVER,
+    GAME_OVER,
 } GameState;
 
 typedef enum PauseState {
@@ -42,8 +43,15 @@ typedef enum PauseState {
     OPTIONS_PAUSE = 2,
 } PauseState;
 
+typedef struct Options {
+    bool with_music;
+    bool with_sound;
+    bool with_shadows;
+} Options;
+
 typedef enum Pivot {
     LEFT_TOP,
+    LEFT_BOT,
     CENTER_TOP,
     CENTER_CENTER,
     CENTER_BOT,
@@ -63,12 +71,13 @@ typedef struct Position {
 
 #define GAME_STATE_TO_NAME(state) \
     ((state == PLAYER_IS_PICKING)  ? "PLAYER_IS_PICKING" \
+     : (state == INTRO)            ? "INTRO" \
      : (state == GOLOVA_IS_EATING) ? "GOLOVA_IS_EATING" \
      : (state == SCENE_OVER)       ? "SCENE_OVER" \
      : (state == GAME_OVER)        ? "GAME_OVER" \
                                    : "UNKNOWN")
 
-static float GAME_STATE_TO_TIME[] = {10.0, 3.0, 0.0, 0.0};
+static float GAME_STATE_TO_TIME[] = {0.0, 2.0, 3.0, 0.0, 0.0};
 
 static RenderTexture2D SCREEN;
 static char *SCENES_DIR = "resources/scenes";
@@ -89,6 +98,7 @@ static PauseState PAUSE_STATE;
 static PauseState NEXT_PAUSE_STATE;
 static GameState GAME_STATE;
 static GameState NEXT_GAME_STATE;
+static Options OPTIONS = {.with_music = true, .with_sound = true, .with_shadows = true};
 static float TIME_REMAINING;
 static bool IS_NEXT_SCENE;
 static bool IS_EXIT_GAME;
@@ -98,6 +108,7 @@ static float DT;
 static float TIME;
 static Vector2 MOUSE_POSITION;
 static bool IS_ESCAPE_PRESSED;
+static bool IS_ANY_KEY_PRESSED;
 static bool IS_LMB_PRESSED;
 static bool IS_ALTF4_PRESSED;
 static Ray MOUSE_RAY;
@@ -121,6 +132,7 @@ static void draw_imgui(void);
 static void play_touch_sound(void);
 
 static bool ggui_button(Position pos, const char *text, int font_size);
+static void ggui_checkbox(Position pos, bool *is_checked);
 static Rectangle ggui_get_rec(Position pos, int width, int height);
 static void ggui_text(Position pos, const char *text, int font_size, Color color);
 
@@ -175,9 +187,12 @@ int main(void) {
 
 static void main_update(void) {
     update_game();
-    UpdateMusicStream(SCENE_MUSIC);
 
-    draw_scene(SCREEN, BLACK, SCENE.camera, true, true, true, true);
+    if (GAME_STATE == INTRO) {
+        draw_scene(SCREEN, BLACK, SCENE.camera, OPTIONS.with_shadows, true, false, true);
+    } else {
+        draw_scene(SCREEN, BLACK, SCENE.camera, OPTIONS.with_shadows, true, true, true);
+    }
 
     // Draw postfx and ui
     BeginDrawing();
@@ -195,7 +210,7 @@ static void load_curr_scene(void) {
 
     N_DEAD_CORRECT_ITEMS = 0;
     N_DEAD_WRONG_ITEMS = 0;
-    NEXT_GAME_STATE = PLAYER_IS_PICKING;
+    NEXT_GAME_STATE = CURR_SCENE_ID == 0 ? INTRO : PLAYER_IS_PICKING;
     TIME_REMAINING = GAME_STATE_TO_TIME[GAME_STATE];
     DEFAULT_CAMERA_FOVY = SCENE.camera.fovy;
 
@@ -212,6 +227,9 @@ static void update_game(void) {
     IS_LMB_PRESSED = IsMouseButtonPressed(MOUSE_BUTTON_LEFT);
     IS_ALTF4_PRESSED = IsKeyDown(KEY_LEFT_ALT) && IsKeyPressed(KEY_F4);
     MOUSE_RAY = GetMouseRay(MOUSE_POSITION, SCENE.camera);
+    IS_ANY_KEY_PRESSED = GetKeyPressed() != 0 || IS_LMB_PRESSED;
+
+    if (OPTIONS.with_music) UpdateMusicStream(SCENE_MUSIC);
 
     Matrix golova_mat = MatrixMultiply(
         get_transform_matrix(SCENE.golova.transform), SCENE.golova.matrix
@@ -223,7 +241,7 @@ static void update_game(void) {
     }
 #endif
 
-    if (IS_ESCAPE_PRESSED) {
+    if (IS_ESCAPE_PRESSED && GAME_STATE != INTRO) {
         if (PAUSE_STATE == NOT_PAUSED) NEXT_PAUSE_STATE = MAIN_PAUSE;
         else NEXT_PAUSE_STATE = NOT_PAUSED;
     }
@@ -241,7 +259,8 @@ static void update_game(void) {
     }
 
     PAUSE_STATE = NEXT_PAUSE_STATE;
-    IS_BLURED = PAUSE_STATE > 0 || GAME_STATE == SCENE_OVER || GAME_STATE == GAME_OVER;
+    IS_BLURED = PAUSE_STATE > 0 || GAME_STATE == SCENE_OVER || GAME_STATE == GAME_OVER
+                || GAME_STATE == INTRO;
 
     // -------------------------------------------------------------------
     // Update camera
@@ -398,7 +417,9 @@ static void update_game(void) {
     if (PAUSE_STATE > 0) return;
     TIME_REMAINING -= GetFrameTime();
 
-    if (GAME_STATE == PLAYER_IS_PICKING) {
+    if (GAME_STATE == INTRO) {
+        if (IS_ANY_KEY_PRESSED) NEXT_GAME_STATE = PLAYER_IS_PICKING;
+    } else if (GAME_STATE == PLAYER_IS_PICKING) {
         // Set up Golova state
         SCENE.golova.state = GOLOVA_IDLE;
 
@@ -462,7 +483,7 @@ static void update_game(void) {
             }
 
             PICKED_ITEM->state = ITEM_DYING;
-            PlaySound(PICKED_ITEM->sound);
+            if (OPTIONS.with_sound) PlaySound(PICKED_ITEM->sound);
         }
     } else if (GAME_STATE == GOLOVA_IS_EATING) {
         // Set up Golova state
@@ -503,7 +524,7 @@ static void draw_ggui(void) {
     int cx = screen_width / 2;
     int cy = screen_height / 2;
 
-    if (PAUSE_STATE == MAIN_PAUSE) {
+    if (PAUSE_STATE > NOT_PAUSED) {
         int font_size = 60;
         int gap = 20;
         int pad = 50;
@@ -522,15 +543,46 @@ static void draw_ggui(void) {
         DrawRectangleRoundedLines(main_rec, 0.2, 16, 4, WHITE);
 
         int y = main_rec.y + pad;
-        if (ggui_button((Position){cx, y, CENTER_TOP}, resume_text, font_size)) {
-            NEXT_PAUSE_STATE = NOT_PAUSED;
+        if (PAUSE_STATE == MAIN_PAUSE) {
+            if (ggui_button((Position){cx, y, CENTER_TOP}, resume_text, font_size)) {
+                NEXT_PAUSE_STATE = NOT_PAUSED;
+            }
+
+            y += font_size + gap;
+            if (ggui_button((Position){cx, y, CENTER_TOP}, options_text, font_size)) {
+                NEXT_PAUSE_STATE = OPTIONS_PAUSE;
+            }
+
+            y += font_size + gap;
+            IS_EXIT_GAME = ggui_button(
+                (Position){cx, y, CENTER_TOP}, quit_text, font_size
+            );
+        } else if (PAUSE_STATE == OPTIONS_PAUSE) {
+            font_size /= 2;
+
+            ggui_text(
+                (Position){main_rec.x + gap, y, LEFT_BOT}, "Music  ", font_size, WHITE
+            );
+            ggui_checkbox(
+                (Position){main_rec.x + 230, y - 5, CENTER_BOT}, &OPTIONS.with_music
+            );
+
+            y += font_size + gap;
+            ggui_text(
+                (Position){main_rec.x + gap, y, LEFT_BOT}, "Sound  ", font_size, WHITE
+            );
+            ggui_checkbox(
+                (Position){main_rec.x + 230, y - 5, CENTER_BOT}, &OPTIONS.with_sound
+            );
+
+            y += font_size + gap;
+            ggui_text(
+                (Position){main_rec.x + gap, y, LEFT_BOT}, "Shadows", font_size, WHITE
+            );
+            ggui_checkbox(
+                (Position){main_rec.x + 230, y - 5, CENTER_BOT}, &OPTIONS.with_shadows
+            );
         }
-
-        y += font_size + gap;
-        ggui_button((Position){cx, y, CENTER_TOP}, options_text, font_size);
-
-        y += font_size + gap;
-        IS_EXIT_GAME = ggui_button((Position){cx, y, CENTER_TOP}, quit_text, font_size);
     } else if (GAME_STATE == SCENE_OVER || GAME_STATE == GAME_OVER) {
         const char *text;
         Color color;
@@ -562,27 +614,41 @@ static void draw_ggui(void) {
 
     // -------------------------------------------------------------------
     // Draw correctly picked items
-    int n_items = N_DEAD_CORRECT_ITEMS + SCENE.board.n_hits_required;
-    int item_size = 64;
-    int pad = 20;
-    int mid_x = screen_width / 2;
-    int x = mid_x - (item_size * n_items + pad * (n_items - 1)) / 2;
+    if (GAME_STATE != INTRO) {
+        int n_items = N_DEAD_CORRECT_ITEMS + SCENE.board.n_hits_required;
+        int item_size = 64;
+        int pad = 20;
+        int mid_x = screen_width / 2;
+        int x = mid_x - (item_size * n_items + pad * (n_items - 1)) / 2;
 
-    for (int i = 0; i < n_items; ++i) {
-        Texture texture;
-        Color color = WHITE;
-        if (i < N_DEAD_CORRECT_ITEMS) {
-            Item *item = DEAD_CORRECT_ITEMS[i];
-            texture = item->texture;
-        } else {
-            texture = TEXTURE_QUESTION_MARK;
-            color = PURPLE;
+        for (int i = 0; i < n_items; ++i) {
+            Texture texture;
+            Color color = WHITE;
+            if (i < N_DEAD_CORRECT_ITEMS) {
+                Item *item = DEAD_CORRECT_ITEMS[i];
+                texture = item->texture;
+            } else {
+                texture = TEXTURE_QUESTION_MARK;
+                color = PURPLE;
+            }
+            Rectangle src = {0.0, 0.0, texture.width, texture.height};
+            Rectangle dst = {x, pad, item_size, item_size};
+            DrawTexturePro(texture, src, dst, Vector2Zero(), 0.0, color);
+
+            x += pad + item_size;
         }
-        Rectangle src = {0.0, 0.0, texture.width, texture.height};
-        Rectangle dst = {x, pad, item_size, item_size};
-        DrawTexturePro(texture, src, dst, Vector2Zero(), 0.0, color);
+    }
 
-        x += pad + item_size;
+    // -------------------------------------------------------------------
+    // Draw game intro
+    if (GAME_STATE == INTRO) {
+        Position pos = {screen_width / 2, screen_height / 2, CENTER_CENTER};
+        ggui_text(pos, "Golova", 200, WHITE);
+        pos.y += 120;
+
+        Color color = WHITE;
+        color.a = 255.0 * (sinf(TIME * 8.0) * 0.4 + 0.6);
+        ggui_text(pos, "[PRESS ANY KEY]", 40, color);
     }
 }
 
@@ -597,6 +663,8 @@ static Rectangle ggui_get_rec(Position pos, int width, int height) {
         y -= height / 2;
     } else if (pos.pivot == CENTER_BOT) {
         x -= width / 2;
+        y -= height;
+    } else if (pos.pivot == LEFT_BOT) {
         y -= height;
     }
 
@@ -613,6 +681,24 @@ static bool ggui_button(Position pos, const char *text, int font_size) {
     DrawText(text, rec.x, rec.y, font_size, color);
 
     return is_hit && IS_LMB_PRESSED;
+}
+
+static void ggui_checkbox(Position pos, bool *is_checked) {
+    int size = 20;
+    Rectangle rec = ggui_get_rec(pos, size, size);
+
+    Rectangle bound_rec = rec;
+    bound_rec.x -= 5;
+    bound_rec.y -= 5;
+    bound_rec.width += 10;
+    bound_rec.height += 10;
+
+    bool is_hit = CheckCollisionPointRec(MOUSE_POSITION, bound_rec);
+    Color color = is_hit ? WHITE : LIGHTGRAY;
+    *is_checked ^= is_hit && IS_LMB_PRESSED;
+
+    DrawRectangleLinesEx(bound_rec, 3, color);
+    if (*is_checked) DrawRectangle(rec.x, rec.y, rec.width, rec.height, color);
 }
 
 static void ggui_text(Position pos, const char *text, int font_size, Color color) {
@@ -647,7 +733,7 @@ static void update_value2(
 
 static void play_touch_sound(void) {
     if (MAX_N_TOUCH_SOUNDS == 0) return;
-    PlaySound(TOUCH_SOUNDS[CURR_TOUCH_SOUND_ID++]);
+    if (OPTIONS.with_sound) PlaySound(TOUCH_SOUNDS[CURR_TOUCH_SOUND_ID++]);
     if (CURR_TOUCH_SOUND_ID >= MAX_N_TOUCH_SOUNDS) CURR_TOUCH_SOUND_ID = 0;
 }
 
