@@ -501,13 +501,19 @@ static void update_game(void) {
         // PLAYER_IS_PICKING state is over
         if (TIME_REMAINING <= 0.0) {
             NEXT_GAME_STATE = GOLOVA_IS_EATING;
+
+            // Pick random wrong item
             if (!PICKED_ITEM) {
+                int n_ids = 0;
+                int ids[MAX_N_BOARD_ITEMS];
                 for (size_t i = 0; i < SCENE.board.n_items; ++i) {
                     Item *item = &SCENE.board.items[i];
                     if (!(item->state == ITEM_DEAD) && !item->is_correct) {
-                        PICKED_ITEM = item;
+                        ids[n_ids++] = i;
                     }
                 }
+
+                PICKED_ITEM = &SCENE.board.items[ids[rand() % (n_ids)]];
             }
 
             PICKED_ITEM->state = ITEM_DYING;
