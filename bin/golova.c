@@ -6,6 +6,7 @@
 #include "rlgl.h"
 #include <math.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 #if defined(PLATFORM_WEB)
@@ -63,6 +64,13 @@ typedef struct Position {
     Pivot pivot;
 } Position;
 
+#define MAX_N_SOUNDS 8
+typedef struct SoundsRoulette {
+    int n;
+    int i;
+    Sound sounds[MAX_N_SOUNDS];
+} SoundsRoulette;
+
 #define PAUSE_STATE_TO_NAME(state) \
     ((state == NOT_PAUSED)      ? "NOT_PAUSED" \
      : (state == MAIN_PAUSE)    ? "MAIN_PAUSE" \
@@ -87,13 +95,12 @@ static int N_SCENES;
 
 static Texture2D TEXTURE_QUESTION_MARK;
 static Music SCENE_MUSIC;
+static SoundsRoulette TOUCH_SOUNDS;
+static SoundsRoulette WRONG_SOUNDS;
+static SoundsRoulette CORRECT_SOUNDS;
 
-#define MAX_N_TOUCH_SOUNDS 8
-static int CURR_TOUCH_SOUND_ID;
-static int N_TOUCH_SOUNDS;
-static Sound TOUCH_SOUNDS[MAX_N_TOUCH_SOUNDS];
-
-static float DEFAULT_CAMERA_FOVY;
+static Camera3D DEFAULT_CAMERA;
+static float CAMERA_SHAKING_TIME;
 static PauseState PAUSE_STATE;
 static PauseState NEXT_PAUSE_STATE;
 static GameState GAME_STATE;
@@ -124,12 +131,13 @@ static Item *DEAD_WRONG_ITEMS[MAX_N_BOARD_ITEMS];
 static float EYES_TARGET_SHIFT;
 static float EYES_TARGET_UPLIFT;
 
+static SoundsRoulette load_sounds_roulette(char *prefix);
+static void play_sound_roulette(SoundsRoulette *sounds);
 static void load_curr_scene(void);
 static void main_update(void);
 static void update_game(void);
 static void draw_ggui(void);
 static void draw_imgui(void);
-static void play_touch_sound(void);
 
 static bool ggui_button(Position pos, const char *text, int font_size);
 static void ggui_checkbox(Position pos, bool *is_checked);
@@ -154,18 +162,9 @@ int main(void) {
     PlayMusicStream(SCENE_MUSIC);
 
     // Load touch sounds
-    int n_file_names;
-    char **file_names = get_file_names_in_dir("resources/audio", &n_file_names);
-    for (int i = 0; i < n_file_names; ++i) {
-        if (N_TOUCH_SOUNDS == MAX_N_TOUCH_SOUNDS) break;
-
-        char *file_name = file_names[i];
-        if (strncmp(file_name, "touch", 5) == 0) {
-            const char *file_path_parts[2] = {"resources/audio", file_name};
-            const char *file_path = TextJoin(file_path_parts, 2, "/");
-            TOUCH_SOUNDS[N_TOUCH_SOUNDS++] = LoadSound(file_path);
-        }
-    }
+    TOUCH_SOUNDS = load_sounds_roulette("touch");
+    WRONG_SOUNDS = load_sounds_roulette("wrong");
+    CORRECT_SOUNDS = load_sounds_roulette("correct");
 
 #ifdef DRAW_IMGUI
     load_imgui();
@@ -202,6 +201,25 @@ static void main_update(void) {
     EndDrawing();
 }
 
+static SoundsRoulette load_sounds_roulette(char *prefix) {
+    SoundsRoulette sounds = {0};
+
+    int n_file_names;
+    char **file_names = get_file_names_in_dir("resources/audio", &n_file_names);
+    for (int i = 0; i < n_file_names; ++i) {
+        if (sounds.n == MAX_N_SOUNDS) break;
+
+        char *file_name = file_names[i];
+        if (strncmp(file_name, prefix, strlen(prefix)) == 0) {
+            const char *file_path_parts[2] = {"resources/audio", file_name};
+            const char *file_path = TextJoin(file_path_parts, 2, "/");
+            sounds.sounds[sounds.n++] = LoadSound(file_path);
+        }
+    }
+
+    return sounds;
+}
+
 static void load_curr_scene(void) {
     static char fp[2048];
     sprintf(fp, "%s/%s", SCENES_DIR, SCENE_FILE_NAMES[CURR_SCENE_ID]);
@@ -212,7 +230,7 @@ static void load_curr_scene(void) {
     N_DEAD_WRONG_ITEMS = 0;
     NEXT_GAME_STATE = CURR_SCENE_ID == 0 ? INTRO : PLAYER_IS_PICKING;
     TIME_REMAINING = GAME_STATE_TO_TIME[GAME_STATE];
-    DEFAULT_CAMERA_FOVY = SCENE.camera.fovy;
+    DEFAULT_CAMERA = SCENE.camera;
 
     for (int i = 0; i < SCENE.board.n_hint_items; ++i) {
         DEAD_CORRECT_ITEMS[N_DEAD_CORRECT_ITEMS++] = &SCENE.board.hint_items[i];
@@ -267,10 +285,20 @@ static void update_game(void) {
     if (GAME_STATE == GOLOVA_IS_EATING) {
         float end_time = GAME_STATE_TO_TIME[GOLOVA_IS_EATING];
         float cur_time = end_time - TIME_REMAINING;
-        SCENE.camera.fovy = DEFAULT_CAMERA_FOVY - 5.0 * cur_time / end_time;
+        SCENE.camera.fovy = DEFAULT_CAMERA.fovy - 5.0 * cur_time / end_time;
     } else {
         SCENE.camera.fovy += DT * 10.0;
-        SCENE.camera.fovy = MIN(DEFAULT_CAMERA_FOVY, SCENE.camera.fovy);
+        SCENE.camera.fovy = MIN(DEFAULT_CAMERA.fovy, SCENE.camera.fovy);
+    }
+
+    if (CAMERA_SHAKING_TIME > 0.0) {
+        CAMERA_SHAKING_TIME -= DT;
+        Vector3 offset = {
+            (float)rand() / RAND_MAX, (float)rand() / RAND_MAX, (float)rand() / RAND_MAX};
+        offset = Vector3Scale(offset, 0.01);
+        SCENE.camera.target = Vector3Add(DEFAULT_CAMERA.target, offset);
+    } else {
+        SCENE.camera.target = DEFAULT_CAMERA.target;
     }
 
     // -------------------------------------------------------------------
@@ -444,7 +472,7 @@ static void update_game(void) {
                     PICKED_ITEM->state = ITEM_COLD;
                     PICKED_ITEM = item;
                     PICKED_ITEM->state = ITEM_ACTIVE;
-                    play_touch_sound();
+                    play_sound_roulette(&TOUCH_SOUNDS);
                     // Unpick the item
                 } else if (PICKED_ITEM) {
                     PICKED_ITEM->state = ITEM_COLD;
@@ -453,7 +481,7 @@ static void update_game(void) {
                 } else {
                     PICKED_ITEM = item;
                     PICKED_ITEM->state = ITEM_ACTIVE;
-                    play_touch_sound();
+                    play_sound_roulette(&TOUCH_SOUNDS);
                 }
             } else if (is_hit) {
                 // Heat up (or stay active) the item
@@ -501,9 +529,12 @@ static void update_game(void) {
             if (PICKED_ITEM->is_correct) {
                 DEAD_CORRECT_ITEMS[N_DEAD_CORRECT_ITEMS++] = PICKED_ITEM;
                 SCENE.board.n_hits_required -= 1;
+                play_sound_roulette(&CORRECT_SOUNDS);
             } else {
                 DEAD_WRONG_ITEMS[N_DEAD_WRONG_ITEMS++] = PICKED_ITEM;
                 SCENE.board.n_misses_allowed -= 1;
+                play_sound_roulette(&WRONG_SOUNDS);
+                CAMERA_SHAKING_TIME = 0.6;
             }
             PICKED_ITEM = NULL;
 
@@ -612,9 +643,9 @@ static void draw_ggui(void) {
         }
     }
 
-    // -------------------------------------------------------------------
-    // Draw correctly picked items
     if (GAME_STATE != INTRO) {
+        // ---------------------------------------------------------------
+        // Draw correctly picked items
         int n_items = N_DEAD_CORRECT_ITEMS + SCENE.board.n_hits_required;
         int item_size = 64;
         int pad = 20;
@@ -637,6 +668,15 @@ static void draw_ggui(void) {
 
             x += pad + item_size;
         }
+
+        // ---------------------------------------------------------------
+        // Draw current level number
+        ggui_text(
+            (Position){10, 10, LEFT_TOP},
+            TextFormat("Level %d", CURR_SCENE_ID + 1),
+            30,
+            WHITE
+        );
     }
 
     // -------------------------------------------------------------------
@@ -731,10 +771,10 @@ static void update_value2(
     }
 }
 
-static void play_touch_sound(void) {
-    if (MAX_N_TOUCH_SOUNDS == 0) return;
-    if (OPTIONS.with_sound) PlaySound(TOUCH_SOUNDS[CURR_TOUCH_SOUND_ID++]);
-    if (CURR_TOUCH_SOUND_ID >= MAX_N_TOUCH_SOUNDS) CURR_TOUCH_SOUND_ID = 0;
+static void play_sound_roulette(SoundsRoulette *sounds) {
+    if (sounds->n == 0) return;
+    if (OPTIONS.with_sound) PlaySound(sounds->sounds[sounds->i++]);
+    if (sounds->i >= sounds->n) sounds->i = 0;
 }
 
 #ifdef DRAW_IMGUI
