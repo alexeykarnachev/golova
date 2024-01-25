@@ -70,6 +70,7 @@ typedef struct Position {
 
 static float GAME_STATE_TO_TIME[] = {10.0, 3.0, 0.0, 0.0};
 
+static RenderTexture2D SCREEN;
 static char *SCENES_DIR = "resources/scenes";
 static int CURR_SCENE_ID;
 static char **SCENE_FILE_NAMES;
@@ -131,6 +132,7 @@ static void update_value2(
 int main(void) {
     InitWindow(SCREEN_WIDTH, SCREEN_HEIGHT, "Golova");
     init_core(SCREEN_WIDTH, SCREEN_HEIGHT);
+    SCREEN = LoadRenderTexture(SCREEN_WIDTH, SCREEN_HEIGHT);
     SCENE_FILE_NAMES = get_file_names_in_dir(SCENES_DIR, &N_SCENES);
     TEXTURE_QUESTION_MARK = LoadTexture("resources/sprites/question.png");
 
@@ -175,11 +177,11 @@ static void main_update(void) {
     update_game();
     UpdateMusicStream(SCENE_MUSIC);
 
-    draw_scene(true);
+    draw_scene(SCREEN, BLACK, SCENE.camera, true, true, true, true);
 
     // Draw postfx and ui
     BeginDrawing();
-    draw_postfx(IS_BLURED);
+    draw_postfx(SCREEN.texture, IS_BLURED);
     draw_ggui();
     draw_imgui();
     EndDrawing();

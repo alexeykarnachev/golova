@@ -141,13 +141,13 @@ void save_scene(const char *file_path);
 void load_forest(Forest *forest, const char *file_path);
 void save_forest(Forest *forest, const char *file_path);
 
-void draw_scene(bool with_shadows);
-void draw_scene_ex(
+void draw_scene(
     RenderTexture2D screen,
     Color clear_color,
     Camera3D camera,
     bool with_shadows,
+    bool with_sky,
+    bool with_items,
     bool sort_trees
 );
-void draw_postfx(bool is_blured);
-void draw_postfx_ex(Texture2D texture, bool is_blured);
+void draw_postfx(Texture2D texture, bool is_blured);

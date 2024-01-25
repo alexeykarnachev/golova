@@ -17,7 +17,6 @@
 Scene SCENE;
 
 RenderTexture2D SHADOWMAP;
-RenderTexture2D SCREEN;
 Material MATERIAL_DEFAULT;
 Material MATERIAL_SKY;
 Mesh PLANE_MESH;
@@ -36,7 +35,6 @@ void init_core(int screen_width, int screen_height) {
     PLANE_MESH = GenMeshPlane(1.0, 1.0, 2, 2);
     SHADOWMAP = LoadRenderTexture(SHADOWMAP_WIDTH, SHADOWMAP_HEIGHT);
     SetTextureWrap(SHADOWMAP.texture, TEXTURE_WRAP_CLAMP);
-    SCREEN = LoadRenderTexture(screen_width, screen_height);
     POSTFX_SHADER = load_shader(0, "postfx.frag");
 
     MATERIAL_SKY = LoadMaterialDefault();
@@ -323,10 +321,6 @@ static void draw_items(bool with_borders) {
     }
 }
 
-void draw_scene(bool with_shadows) {
-    draw_scene_ex(SCREEN, BLACK, SCENE.camera, with_shadows, true);
-}
-
 static int compare_trees(const void *a, const void *b) {
     const Tree *tree1 = (const Tree *)a;
     const Tree *tree2 = (const Tree *)b;
@@ -343,11 +337,13 @@ static int compare_trees(const void *a, const void *b) {
     }
 }
 
-void draw_scene_ex(
+void draw_scene(
     RenderTexture2D screen,
     Color clear_color,
     Camera3D camera,
     bool with_shadows,
+    bool with_sky,
+    bool with_items,
     bool sort_trees
 ) {
     Matrix light_vp;
@@ -372,24 +368,26 @@ void draw_scene_ex(
     ClearBackground(clear_color);
 
     // Sky
-    BeginShaderMode(MATERIAL_SKY.shader);
-    float screen_size[2] = {GetScreenWidth(), GetScreenHeight()};
-    float time = GetTime();
-    SetShaderValueV(
-        MATERIAL_SKY.shader,
-        GetShaderLocation(MATERIAL_SKY.shader, "u_screen_size"),
-        screen_size,
-        SHADER_UNIFORM_VEC2,
-        1
-    );
-    SetShaderValue(
-        MATERIAL_SKY.shader,
-        GetShaderLocation(MATERIAL_SKY.shader, "u_time"),
-        &time,
-        SHADER_UNIFORM_FLOAT
-    );
-    DrawRectangle(0, 0, screen_size[0], screen_size[1], BLACK);
-    EndShaderMode();
+    if (with_sky) {
+        BeginShaderMode(MATERIAL_SKY.shader);
+        float screen_size[2] = {GetScreenWidth(), GetScreenHeight()};
+        float time = GetTime();
+        SetShaderValueV(
+            MATERIAL_SKY.shader,
+            GetShaderLocation(MATERIAL_SKY.shader, "u_screen_size"),
+            screen_size,
+            SHADER_UNIFORM_VEC2,
+            1
+        );
+        SetShaderValue(
+            MATERIAL_SKY.shader,
+            GetShaderLocation(MATERIAL_SKY.shader, "u_time"),
+            &time,
+            SHADER_UNIFORM_FLOAT
+        );
+        DrawRectangle(0, 0, screen_size[0], screen_size[1], BLACK);
+        EndShaderMode();
+    }
 
     BeginMode3D(camera);
 
@@ -471,13 +469,15 @@ void draw_scene_ex(
     draw_mesh_t(SCENE.board.transform, SCENE.board.material, SCENE.board.mesh);
 
     // Items
-    draw_items(true);
+    if (with_items) {
+        draw_items(true);
+    }
 
     EndMode3D();
     EndTextureMode();
 }
 
-void draw_postfx_ex(Texture2D texture, bool with_blur) {
+void draw_postfx(Texture2D texture, bool with_blur) {
     BeginShaderMode(POSTFX_SHADER);
     int u_with_blur = (int)with_blur;
     SetShaderValue(
@@ -493,10 +493,6 @@ void draw_postfx_ex(Texture2D texture, bool with_blur) {
         WHITE
     );
     EndShaderMode();
-}
-
-void draw_postfx(bool with_blur) {
-    draw_postfx_ex(SCREEN.texture, with_blur);
 }
 
 static char *load_shader_src(const char *file_name) {

@@ -135,7 +135,7 @@ int main(void) {
         bool sort_trees = get_picked_entity_type() != TREE_TYPE;
 
         // Draw main editor screen
-        draw_scene_ex(FULL_SCREEN, DARKGRAY, CAMERA, WITH_SHADOWS, sort_trees);
+        draw_scene(FULL_SCREEN, DARKGRAY, CAMERA, WITH_SHADOWS, false, true, sort_trees);
 
         BeginTextureMode(FULL_SCREEN);
         rlDisableBackfaceCulling();
@@ -164,12 +164,18 @@ int main(void) {
         // Draw scene preview screen
         rlEnableBackfaceCulling();
         Color clear_color = {CLEAR_COLOR[0], CLEAR_COLOR[1], CLEAR_COLOR[2], 255};
-        draw_scene_ex(
-            PREVIEW_SCREEN, clear_color, SCENE.camera, WITH_SHADOWS, sort_trees
+        draw_scene(
+            PREVIEW_SCREEN,
+            clear_color,
+            SCENE.camera,
+            WITH_SHADOWS,
+            false,
+            true,
+            sort_trees
         );
 
         BeginTextureMode(PREVIEW_SCREEN_POSTFX);
-        draw_postfx_ex(PREVIEW_SCREEN.texture, WITH_BLUR);
+        draw_postfx(PREVIEW_SCREEN.texture, WITH_BLUR);
         EndTextureMode();
 
         // Blit screens
