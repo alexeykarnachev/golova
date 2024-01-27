@@ -85,7 +85,7 @@ typedef struct SoundsRoulette {
      : (state == GAME_OVER)        ? "GAME_OVER" \
                                    : "UNKNOWN")
 
-static float GAME_STATE_TO_TIME[] = {0.0, 2.0, 3.0, 0.0, 0.0};
+static float GAME_STATE_TO_TIME[] = {0.0, 12.0, 2.5, 0.0, 0.0};
 
 static RenderTexture2D SCREEN;
 static char *SCENES_DIR = "resources/scenes";
@@ -119,6 +119,7 @@ static float DT;
 static float TIME;
 static Vector2 MOUSE_POSITION;
 static bool IS_ESCAPE_PRESSED;
+static bool IS_SPACE_PRESSED;
 static bool IS_ANY_KEY_PRESSED;
 static bool IS_LMB_PRESSED;
 static bool IS_ALTF4_PRESSED;
@@ -250,6 +251,7 @@ static void update_game(void) {
     TIME = GetTime();
     MOUSE_POSITION = GetMousePosition();
     IS_ESCAPE_PRESSED = IsKeyPressed(KEY_ESCAPE);
+    IS_SPACE_PRESSED = IsKeyPressed(KEY_SPACE);
     IS_LMB_PRESSED = IsMouseButtonPressed(MOUSE_BUTTON_LEFT);
     IS_ALTF4_PRESSED = IsKeyDown(KEY_LEFT_ALT) && IsKeyPressed(KEY_F4);
     MOUSE_RAY = GetMouseRay(MOUSE_POSITION, SCENE.camera);
@@ -459,6 +461,10 @@ static void update_game(void) {
     if (PAUSE_STATE > 0) return;
     TIME_REMAINING -= GetFrameTime();
 
+    if (IS_SPACE_PRESSED && GAME_STATE == PLAYER_IS_PICKING) {
+        TIME_REMAINING = 0.0;
+    }
+
     if (GAME_STATE == INTRO) {
         if (IS_ANY_KEY_PRESSED) NEXT_GAME_STATE = PLAYER_IS_PICKING;
     } else if (GAME_STATE == PLAYER_IS_PICKING) {
@@ -657,7 +663,7 @@ static void draw_ggui(void) {
 
         pos = (Position){cx, cy + font_size, CENTER_TOP};
         if (GAME_STATE == SCENE_OVER) {
-            IS_NEXT_SCENE = ggui_button(pos, "Continue", font_size / 2);
+            IS_NEXT_SCENE = ggui_button(pos, "Continue", font_size / 2) || IS_SPACE_PRESSED;
         } else if (GAME_STATE == GAME_OVER) {
             ggui_text(pos, "Game Over", font_size / 2, LIGHTGRAY);
         }

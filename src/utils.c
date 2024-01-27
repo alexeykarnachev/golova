@@ -50,6 +50,10 @@ fail:
     return NULL;
 }
 
+static int pstrcmp( const void* a, const void* b ) {
+  return strcmp( *(const char**)a, *(const char**)b );
+}
+
 char **get_file_names_in_dir(const char *path, int *n_file_names) {
     DIR *dir = opendir(path);
     if (dir == NULL) {
@@ -70,6 +74,8 @@ char **get_file_names_in_dir(const char *path, int *n_file_names) {
 
     *n_file_names = i;
     closedir(dir);
+
+    qsort(file_names, *n_file_names, sizeof(file_names[0]), pstrcmp );
     return file_names;
 }
 
