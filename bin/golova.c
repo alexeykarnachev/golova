@@ -111,6 +111,10 @@ static bool IS_NEXT_SCENE;
 static bool IS_EXIT_GAME;
 static bool IS_BLURED;
 
+static float ITEMS_ELEVATION;
+static float ITEMS_FALL_SPEED;
+static float ITEMS_FALL_ACCELERATION;
+
 static float DT;
 static float TIME;
 static Vector2 MOUSE_POSITION;
@@ -232,6 +236,10 @@ static void load_curr_scene(void) {
     TIME_REMAINING = GAME_STATE_TO_TIME[GAME_STATE];
     DEFAULT_CAMERA = SCENE.camera;
 
+    ITEMS_FALL_SPEED = 0.0;
+    ITEMS_ELEVATION = 1.5;
+    ITEMS_FALL_ACCELERATION = 5.0;
+
     for (int i = 0; i < SCENE.board.n_hint_items; ++i) {
         DEAD_CORRECT_ITEMS[N_DEAD_CORRECT_ITEMS++] = &SCENE.board.hint_items[i];
     }
@@ -302,7 +310,13 @@ static void update_game(void) {
     }
 
     // -------------------------------------------------------------------
-    // Update board items
+    // Update items
+    if (GAME_STATE != INTRO) {
+        ITEMS_ELEVATION -= ITEMS_FALL_SPEED * DT;
+        if (ITEMS_ELEVATION <= 0.0) ITEMS_ELEVATION = 0.0;
+        else ITEMS_FALL_SPEED += ITEMS_FALL_ACCELERATION * DT;
+    }
+
     Board *b = &SCENE.board;
     Transform t = b->transform;
     t.scale = Vector3Scale(Vector3One(), t.scale.x);
@@ -326,7 +340,7 @@ static void update_game(void) {
 
             // Place item on the board
             rlScalef(b->board_scale, b->board_scale, b->board_scale);
-            rlTranslatef(x, 0.0, z);
+            rlTranslatef(x, ITEMS_ELEVATION, z);
             rlScalef(b->item_scale, b->item_scale, b->item_scale);
 
             // Make not cold items larger
